@@ -1048,6 +1048,17 @@ webhooks:
 - **发布**：GitHub Releases 提供预编译 APK + Mac 二进制
 - **全部依赖兼容 MIT**（BSD-3/BSD-2/Apache 2.0），无 GPL 传染问题
 
+### 开源合规清单
+
+| 事项 | 说明 |
+|------|------|
+| 项目根放 `LICENSE` 文件 | MIT License, Copyright (c) 2026 yang-bin-free |
+| README 末尾注明依赖 | 列出 Tailscale tsnet (BSD-3)、Gorilla WebSocket (BSD-2)、Android VpnService (Apache 2.0) 及其许可证 |
+| 复制他人源码时保留版权头 | 如果直接复制了 Tailscale 源码文件，文件头的原始 Copyright 声明不可删除 |
+| go.mod 本身就是依赖声明 | BSD/Apache 不要求贴出许可证原文，但建议加 `THIRD_PARTY_LICENSES.md` |
+| 不需要征求原作者许可 | BSD/Apache/MIT 都是宽松协议，不要求事先授权 |
+| 可以商用 | 三个依赖均允许商用，无附加条件 |
+
 ---
 
 ## 10. 实现阶段
