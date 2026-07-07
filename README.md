@@ -1026,7 +1026,59 @@ webhooks:
 
 ---
 
-## 8. WebView vs 原生 UI 选择
+## 8. iOS 支持规划
+
+### 8.1 为什么不 V1 做 iOS
+
+- iOS 分发需要签名/TestFlight/App Store，不能直接装 IPA
+- iOS UI 需要用 SwiftUI 原生（WebView 体验差），Go 核心可复用但 UI 层要重写
+- 语音输入需用 `SFSpeechRecognizer`（Swift 原生），不能像 Android 用 Web Speech API
+
+**策略：V1 Android 先跑通，V2 扩展到 iOS。**
+
+### 8.2 iOS 架构
+
+```
+┌──────────────────────────────────────┐
+│  iOS App (Swift/SwiftUI)             │
+│                                      │
+│  ┌────────────────────────────────┐  │
+│  │ Go 核心 (gomobile → .framework) │  │  ← ★ 和 Android 共享同一份 Go 代码
+│  │  tsnet + WebSocket + 协议处理    │  │     pkg/protocol、pkg/session 完全复用
+│  └────────────────────────────────┘  │
+│                                      │
+│  ┌────────────────────────────────┐  │
+│  │ Chat UI (SwiftUI 原生)          │  │  ← iOS 原生 UI
+│  │  - 会话列表 + 聊天界面           │  │
+│  │  - 权限确认卡片                  │  │
+│  └────────────────────────────────┘  │
+│                                      │
+│  ┌────────────────────────────────┐  │
+│  │ 语音: SFSpeechRecognizer        │  │  ← iOS 原生语音识别
+│  └────────────────────────────────┘  │
+└──────────────────────────────────────┘
+```
+
+### 8.3 与 Android 端的差异
+
+| | Android | iOS |
+|---|---|---|
+| Go 核心 | ✅ gomobile .aar | ✅ gomobile .framework（同一份代码） |
+| UI 层 | WebView (HTML) | SwiftUI（不可复用） |
+| 语音输入 | Web Speech API | SFSpeechRecognizer |
+| 分发 | APK 直装 | TestFlight / App Store |
+
+### 8.4 实现优先级
+
+| 阶段 | 平台 | 内容 |
+|------|------|------|
+| V1 | Android | 全功能上线 |
+| V2 | iOS | Go 核心复用 + SwiftUI UI 重写 + 语音适配 |
+| V3 | 未来 | 如需统一体验 → 自建中继，三端共连 |
+
+---
+
+## 9. WebView vs 原生 UI 选择
 
 选择 **WebView** 渲染聊天界面。
 
@@ -1041,7 +1093,7 @@ webhooks:
 
 ---
 
-## 9. 开源计划
+## 10. 开源计划
 
 - **仓库**：`github.com/yang-bin-free/claude-phone`
 - **许可证**：MIT
@@ -1061,7 +1113,7 @@ webhooks:
 
 ---
 
-## 10. 实现阶段
+## 11. 实现阶段
 
 | 阶段 | 内容 | 预计 |
 |------|------|------|
@@ -1071,10 +1123,11 @@ webhooks:
 | Phase 4 | Android 完整: 语音输入 + 会话管理 + 权限确认卡片 + 健康状态展示 | 1-2 天 |
 | Phase 5 | 打磨: 模板按钮 + 重连/中断 + 错误处理 + 状态指示 | 1-2 天 |
 | Phase 6 | 开源: README + CONTRIBUTING + 构建文档 + GitHub Release | 1 天 |
+| Phase 7 | iOS (V2): Go 核心复用 + SwiftUI Chat UI + SFSpeechRecognizer | 3-4 天 |
 
 ---
 
-## 11. 讨论记录
+## 12. 讨论记录
 
 - 方案演化: SSH+Termius → ttyd → 自建云中继 → 全 Go + tsnet
 - 网络层: Tailscale tsnet 嵌入，零外部 App 依赖
