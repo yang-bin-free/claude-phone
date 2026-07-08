@@ -448,12 +448,13 @@ Agent 自身崩溃（OOM / panic / 被 kill）时：
 
 - claude 子进程可能变成孤儿（Agent 死了但 claude 还在跑）
 - `messages.jsonl` + `meta.json` 是持久化的恢复数据源
+- Agent 为每个自己拉起的 claude 子进程记录 PID + 启动时间戳，写入该会话的 `meta.json`
 
 **恢复流程**：
 
 1. Agent 启动时扫描 `~/.claude-phone/sessions/` 目录
 2. 对有 `meta.json` 但没有活跃 claude 进程的会话标记为 `dormant`
-3. `ps aux | grep claude` 检查是否有孤儿进程，找到则 SIGTERM 清理
+3. 孤儿进程清理：**只按 `meta.json` 记录的 PID 精确匹配**（并校验启动时间戳防 PID 复用），确认是本 Agent 之前拉起的子进程才 SIGTERM——**绝不用 `ps aux | grep claude` 全局扫描**，避免误杀用户在同一台 Mac 上自己打开的 Claude Code 进程
 4. 设备重连后可选择 `select_session` 恢复 dormant 会话（`claude --resume`）
 
 ### 4.15 并发消息
