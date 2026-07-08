@@ -1,6 +1,6 @@
 # Claude Phone — 手机控制 Mac Claude Code
 
-> 设计方案 v1 | 2026-07-07 | 阿彬 & 小罗
+> 设计方案 v2 | 2026-07-08 | 阿彬 & 小罗
 
 ---
 
@@ -9,82 +9,115 @@
 用手机远程控制 Mac 上的 Claude Code，进行开发协作。
 
 **最终体验**：
-- 手机：只安装 **1 个 APK**（Claude Phone）
+- 手机：只安装 **1 个 App**（Android APK / iOS IPA）
 - Mac：只运行 **1 个二进制**（claude-phone-agent）+ Claude Code CLI
 - 不需要装 Tailscale App、不需要装 SSH 客户端、不需要配置端口映射、不需要记忆 IP 地址
+- **多台手机可同时连接同一台 Mac**，各自独立操作，也可共享会话
 
 **核心能力**：
-1. 创建新会话
-2. 切换已有会话
-3. 停止会话
-4. 流式查看 Claude 回复
-5. 语音输入
+1. 创建 / 切换 / 停止会话
+2. 流式查看 Claude 回复
+3. 语音输入
+4. 权限确认（审阅 / 严格模式）
+5. 多设备并发访问
 
 ---
 
 ## 2. 架构
 
+### 2.1 三端总览
+
 ```
-┌─────────────────────────────────┐      ┌──────────────────────────┐
-│  Android APK (Claude Phone)      │      │  Mac                      │
-│                                  │      │                          │
-│  ┌────────────────────────────┐  │      │  claude-phone-agent      │
-│  │ Kotlin Shell (~50行)        │  │      │  (纯 Go 二进制, ~500行)   │
-│  │  - WebView                  │  │      │                          │
-│  │  - 麦克风权限                │  │      │  ┌────────────────────┐ │
-│  │  - VpnService               │  │      │  │ tsnet.Server{}     │ │
-│  └──────────┬─────────────────┘  │      │  │ 加入 Tailscale 网络  │ │
-│             │ JS Bridge          │      │  │ Hostname: claude-mac│ │
-│  ┌──────────▼─────────────────┐  │      │  └────────┬───────────┘ │
-│  │ Go 核心 (gomobile → .aar)   │  │      │           │             │
-│  │                            │  │      │  ┌────────▼───────────┐ │
-│  │  tsnet.Server{}            │  │      │  │ WebSocket Server   │ │
-│  │  WebSocket Client          │  │      │  │ 监听 :9876          │ │
-│  │  协议处理 (共享 pkg/protocol)│  │      │  └────────┬───────────┘ │
-│  └────────────────────────────┘  │      │           │             │
-│                                  │      │  ┌────────▼───────────┐ │
-│  ┌────────────────────────────┐  │      │  │ Session Manager    │ │
-│  │ Chat UI (WebView)           │  │      │  │ map[sessionId]→    │ │
-│  │  HTML/CSS/JS (AI 生成维护)   │  │      │  │   ClaudeSession    │ │
-│  │  Web Speech API (语音输入)   │  │      │  │ 按需启动/唤醒/销毁  │ │
-│  └────────────────────────────┘  │      │  └────────────────────┘ │
-│                                  │      │                          │
-└──────────────────────────────────┘      └──────────────────────────┘
-         │                                        │
-         │          WireGuard 加密直连              │
-         └──────────────┬─────────────────────────┘
-                        │
-              Tailscale 协调服务器
-              (只做地址交换 + 密钥分发, 不传数据)
+┌─────────────────────────────────┐
+│        Tailscale 协调服务器       │
+│   (只做地址交换 + 密钥分发, 不传数据) │
+└──────────┬──────────────────────┘
+           │ WireGuard 加密
+     ┌─────┼─────────────────────┐
+     │     │                     │
+     ▼     ▼                     ▼
+┌──────────────────┐  ┌──────────────────┐  ┌──────────────────┐
+│  Mac              │  │  Android (V1)    │  │  iOS (V2)        │
+│                   │  │                  │  │                  │
+│  claude-phone-    │  │  Claude Phone    │  │  Claude Phone    │
+│  agent            │  │  APK             │  │  IPA             │
+│  (纯 Go 二进制)    │  │                  │  │                  │
+│                   │  │  ┌────────────┐  │  │  ┌────────────┐  │
+│  ┌─────────────┐  │  │  │Kotlin ~200行│  │  │  │SwiftUI 原生 │  │
+│  │tsnet.Server │  │  │  │ VpnService  │  │  │  │NetworkExt.  │  │
+│  │Hostname:    │  │  │  │ JS Bridge   │  │  │  │             │  │
+│  │claude-mac   │  │  │  └─────┬──────┘  │  │  └─────┬──────┘  │
+│  └──────┬──────┘  │  │        │         │  │        │         │
+│         │         │  │  ┌─────▼──────┐  │  │  ┌─────▼──────┐  │
+│  ┌──────▼──────┐  │  │  │Go 核心     │  │  │  │Go 核心     │  │
+│  │WebSocket    │  │  │  │(gomobile→  │  │  │  │(gomobile→  │  │
+│  │Server :9876 │  │  │  │ .aar)      │  │  │  │ .framework)│  │
+│  └──────┬──────┘  │  │  │            │  │  │  │            │  │
+│         │         │  │  │ Tailscale  │  │  │  │ Tailscale  │  │
+│  ┌──────▼──────┐  │  │  │ 引擎       │  │  │  │ 引擎       │  │
+│  │Session      │◄─┼──│  │ + WS Clt   │  │  │  │ + WS Clt   │  │
+│  │Manager      │  │  │  │ + 协议处理  │  │  │  │ + 协议处理  │  │
+│  └─────────────┘  │  │  └────────────┘  │  │  └────────────┘  │
+│                   │  │                  │  │                  │
+│  ┌─────────────┐  │  │  ┌────────────┐  │  │  ┌────────────┐  │
+│  │claude --print│  │  │  │Chat UI     │  │  │  │Chat UI     │  │
+│  │子进程管理     │  │  │  │WebView     │  │  │  │SwiftUI     │  │
+│  └─────────────┘  │  │  │+Web Speech │  │  │  │+SpeechRec. │  │
+│                   │  │  └────────────┘  │  │  └────────────┘  │
+└──────────────────┘  └──────────────────┘  └──────────────────┘
 ```
 
-### 为什么全 Go
+### 2.2 三端差异
 
-- Tailscale 的 `tsnet` 包只需几行代码即可将 Go 进程加入 Tailscale 网络
-- 手机端用 `gomobile` 将 Go 核心编译为 Android `.aar`，通过 JS Bridge 与 WebView 通信
-- 协议和会话管理代码两端共享（`pkg/protocol`、`pkg/session`）
-- 整个项目一个语言、一个工具链、零外部运行时依赖
+| | Mac | Android (V1) | iOS (V2) |
+|---|---|---|---|
+| **Go 核心** | 原生 Go 二进制 | gomobile → .aar | gomobile → .framework |
+| **共享代码** | `pkg/protocol` + `pkg/session` | 同左 | 同左 |
+| **Tailscale 接入** | `tsnet.Server{}` | VpnService + `ipnlocal.LocalBackend` + tun fd | NetworkExtension + `ipnlocal.LocalBackend` + tun fd |
+| **UI 层** | — | WebView (HTML/CSS/JS) | SwiftUI 原生 |
+| **语音输入** | — | Web Speech API | SFSpeechRecognizer |
+| **构建产出** | 单二进制 | APK | IPA |
+| **分发** | GitHub Release | GitHub Release / 直装 | TestFlight / App Store |
 
-### tsnet — 核心黑科技
+### 2.3 为什么全 Go
+
+- Mac 端用 `tsnet` 几行代码加入 Tailscale 网络
+- 手机端用 `gomobile` 编译为 .aar / .framework，三端共享 `pkg/protocol`、`pkg/session`
+- 一个语言、一个工具链、零外部运行时依赖
+
+### 2.4 网络层
+
+#### Mac 端：tsnet（3 行加入网络）
 
 ```go
-// Mac 端: 3 行代码加入 Tailscale 网络
-s := &tsnet.Server{Hostname: "claude-mac", AuthKey: key}
+s := &tsnet.Server{Hostname: "claude-mac", Dir: "~/.claude-phone/tsnet-state"}
 ln, _ := s.Listen("tcp", ":9876")
-
-// Android 端: 同样是 3 行
-s := &tsnet.Server{Hostname: "claude-phone", AuthKey: key}
-conn, _ := s.Dial("tcp", "claude-mac:9876") // 直接用主机名连接！
 ```
 
-`tsnet` 自动处理 NAT 穿透、WireGuard 加密、密钥交换。拿到的是普通 `net.Conn`，读写 TCP 就行。
+tsnet 自动处理 NAT 穿透、WireGuard 加密、密钥交换。`Dir` 持久化状态目录，重启后不需要新 Auth Key。
+
+#### 手机端：Tailscale 引擎 + tun fd
+
+tsnet 不支持 Android/iOS（[Issue #1748](https://github.com/tailscale/tailscale/issues/1748)），采用 Tailscale 官方移动端架构：
+
+```
+Kotlin/Swift 层                     Go 核心 (gomobile)
+┌──────────────────┐               ┌──────────────────────┐
+│ VpnService /     │   tun fd (int) │ ipnlocal.LocalBackend │
+│ NetworkExtension ├──────────────►│ wireguard-go/tun     │
+│                  │               │ netstack (userspace)  │
+│ protect(fd) ◄────┼───────────────┤ socket 保护回调       │
+└──────────────────┘               └──────────────────────┘
+```
+
+实现路径：fork `tailscale-android/libtailscale/`，精简保留 `backend.go` + `net.go` + `vpnfacade.go` + `interfaces.go`，新增 WebSocket Client + 协议层。
 
 ---
 
 ## 3. 项目结构
 
 ```
-claude-phone/                       ← GitHub: github.com/yang-bin-free/claude-phone
+claude-phone/                       ← github.com/yang-bin-free/claude-phone
 ├── README.md
 ├── LICENSE (MIT)
 ├── go.mod
@@ -94,13 +127,19 @@ claude-phone/                       ← GitHub: github.com/yang-bin-free/claude-
 │   └── android-lib/main.go         ← Android Go 核心（gomobile → .aar）
 │
 ├── pkg/
-│   ├── protocol/messages.go        ← ★ 两端共享: JSON 消息定义
-│   └── session/manager.go          ← ★ 两端共享: 会话管理
+│   ├── protocol/messages.go        ← ★ 三端共享: JSON 消息定义 + 错误码
+│   └── session/manager.go          ← ★ 三端共享: 会话管理
 │
 ├── android/                        ← Android 壳
 │   └── app/src/main/
-│       ├── java/.../MainActivity.kt  ← ~50 行 Kotlin
+│       ├── java/.../MainActivity.kt  ← ~200 行 Kotlin (VpnService + JS Bridge)
 │       └── AndroidManifest.xml
+│
+├── ios/                            ← iOS 壳 (V2)
+│   └── ClaudePhone/
+│       ├── App.swift                ← 入口
+│       ├── ChatView.swift           ← SwiftUI 聊天界面
+│       └── NetworkExtension/        ← NEPacketTunnelProvider + tun fd
 │
 ├── web/chat/                       ← 聊天 UI (AI 生成 + 维护)
 │   ├── index.html
@@ -114,23 +153,26 @@ claude-phone/                       ← GitHub: github.com/yang-bin-free/claude-
 
 | 依赖 | 用途 | 许可证 |
 |------|------|--------|
-| `tailscale.com/tsnet` | Tailscale 网络集成 | BSD-3 |
+| `tailscale.com/tsnet` | Mac 端 Tailscale 网络集成 | BSD-3 |
+| `tailscale.com/ipnlocal` 等 | 手机端 Tailscale 引擎 | BSD-3 |
 | `github.com/gorilla/websocket` | WebSocket | BSD-2 |
-| Android VpnService | VPN 隧道 | Apache 2.0 |
-| Web Speech API | 语音输入 | 浏览器内置 |
+| Android VpnService | Android VPN 隧道 | Apache 2.0 |
+| iOS NetworkExtension | iOS VPN 隧道 | 系统框架 API（无分发限制） |
+| Web Speech API | Android 语音输入 | 浏览器内置 |
+| SFSpeechRecognizer | iOS 语音输入 (V2) | 系统框架 API（无分发限制） |
 
-全部兼容 MIT 协议，开源无任何许可问题。
+全部兼容 MIT 协议，无 GPL 传染问题。
 
 ---
 
-## 4. Mac 端助手设计
+## 4. Mac 端设计
 
 ### 4.1 对外命令
 
 ```bash
 claude-phone-agent              # 启动服务（常驻后台）
 claude-phone-agent key          # 生成一次性配对 Auth Key
-claude-phone-agent status       # 查看当前连接的设备和活跃会话
+claude-phone-agent status       # 查看连接的设备、活跃会话、资源状态
 ```
 
 ### 4.2 内部组件
@@ -139,36 +181,76 @@ claude-phone-agent status       # 查看当前连接的设备和活跃会话
 claude-phone-agent
 │
 ├── tsnet 网络层
-│   └── 加入 Tailscale 网络，主机名 = claude-mac
-│       监听 :9876 (Tailscale 虚拟网络内)
+│   └── 加入 Tailscale 网络 (hostname=claude-mac, 监听 :9876)
 │
 ├── WebSocket 服务器
-│   └── 每台手机一个连接
-│       协议: JSON over WebSocket
+│   └── 多台手机同时连接 (device token 鉴权)
+│       每台手机一个 WS 连接，协议: JSON over WebSocket
 │
 ├── Session Manager
 │   └── map[sessionId] → ClaudeSession (纯内存)
+│       每个 session: owner + subscribers[] + claude 子进程
 │       清理协程: 每 5 分钟扫描孤儿会话 → 超时 30 分钟 kill
 │
-└── 配置文件读取
-    └── ~/.claude-phone/projects.yaml (工作目录列表)
-```
-
-### 4.3 会话内部
-
-```
-┌──────────────── ClaudeSession ────────────────┐
-│  phone WS ──► translate ──► stdin  ──► claude │
-│                                           process
-│  phone WS ◄── translate ◄── stdout ◄── claude │
+├── 配置热加载 (fsnotify)
+│   ├── ~/.claude-phone/projects.yaml    (工作目录)
+│   └── ~/.claude-phone/templates.yaml   (命令模板)
 │
-│  cancel() ──► SIGTERM(10s) ──► SIGKILL        │
-└────────────────────────────────────────────────┘
+└── caffeinate 管理
+    └── 有活跃会话时阻止 Mac 睡眠，无活跃会话时允许正常睡眠
 ```
 
-每个会话 = 一个 `claude` 子进程 + 两个 translate goroutine（读/写管道的 JSON 翻译器）。
+### 4.3 多设备并发
 
-### 4.4 Claude CLI 启动参数
+Mac 端支持多台手机同时连接。典型场景：个人手机 + 工作手机同时在线。
+
+```
+┌──────────┐     ┌──────────┐
+│ Pixel 8   │     │ iPhone   │
+│ (device-A)│     │ (device-B)│
+└─────┬────┘     └─────┬────┘
+      │ WS                │ WS
+      ▼                   ▼
+┌────────────────────────────────┐
+│  Mac                           │
+│  session-1 → subscribers: [A]  │
+│  session-2 → subscribers: [B]  │
+│  session-3 → subscribers: [A,B]│  ← 共享会话
+└────────────────────────────────┘
+```
+
+**规则**：
+- 每个会话有 **owner**（创建者）和 **subscribers**（订阅者列表）
+- 任何设备都能发消息，所有订阅者都收到流式输出
+- 权限请求广播给所有订阅者，**先回复先生效**，60s 无响应自动拒绝
+- 只有 owner 能停止会话，非 owner 只能离开（leave_session）
+- 设备断线时从订阅列表移除，会话继续运行
+
+### 4.4 会话内部
+
+```
+┌─────────────────── ClaudeSession ────────────────────┐
+│                                                      │
+│  ┌─ 订阅者 (多台手机) ────────────────────────────┐   │
+│  │  device-A WS ──┐                              │   │
+│  │  device-B WS ──┤──► 消息合并 ──► translate    │   │
+│  │  ...           ┘          │        ──► stdin   │   │
+│  └───────────────────────────┼─────────────┐      │   │
+│                              │             ▼      │   │
+│                          translate     claude     │   │
+│                              │         process    │   │
+│                              ▼             │      │   │
+│  ┌─ 输出扇出 ───────────────┤◄── stdout ──┘      │   │
+│  │  device-A WS ◄──┐       │                     │   │
+│  │  device-B WS ◄──┤── 广播                      │   │
+│  │  ...           ┘                               │   │
+│  └────────────────────────────────────────────────┘   │
+│                                                      │
+│  cancel() ──► close(stdin) ──► SIGTERM(10s) ──► SIGKILL │
+└──────────────────────────────────────────────────────┘
+```
+
+### 4.5 Claude CLI 集成
 
 ```bash
 claude --print \
@@ -177,111 +259,107 @@ claude --print \
   --output-format stream-json \
   --add-dir <工作目录1> \
   --add-dir <工作目录2> \
+  --permission-mode <bypassPermissions|acceptEdits|default> \
   --replay-user-messages
 ```
 
 | 参数 | 作用 |
 |------|------|
 | `--print` | 非交互模式，stdin/stdout 走管道 |
-| `--session-id` | 固定 session ID，支持 `--resume` 恢复 |
-| `--input-format stream-json` | stdin 接受 JSON 行格式输入 |
+| `--session-id` | 固定 ID，支持 `--resume` 恢复 |
+| `--input-format stream-json` | stdin 接受 JSON 行格式 |
 | `--output-format stream-json` | stdout 输出 JSON 行格式（逐 token 流式） |
-| `--add-dir` | 允许工具访问的目录，可传多个 |
-| `--replay-user-messages` | 回显用户消息作为确认 |
+| `--add-dir` | 允许工具访问的目录 |
+| `--permission-mode` | 权限模式（信任/审阅/严格） |
+| `--replay-user-messages` | 回显用户消息 |
 
-### 4.5 消息流转（一条用户消息的完整路径）
+**版本兼容**：Mac 助手启动时执行 `claude --version`，与内置 `compatibleRange`（如 `>=1.0.0,<2.0.0`）比对。不兼容则拒绝启动并输出提示：
+
+```
+claude-phone-agent: Claude Code 版本 2.1.0 不兼容 (需要 >=1.0.0,<2.0.0)
+请升级 claude-phone-agent 或降级 Claude Code CLI
+```
+
+### 4.6 消息流转
 
 ```
 手机发送:
-  {"type":"text","content":"检查 QuoteService 并发安全性"}
-
-       │ Mac 助手翻译为 claude stream-json 格式
+  {"type":"text","content":"检查并发安全性"}
+       │ translate 层翻译为 claude stream-json
        ▼
 写入 claude stdin:
   {"type":"user","message":{"role":"user","content":[
-    {"type":"text","text":"检查 QuoteService 并发安全性"}
+    {"type":"text","text":"检查并发安全性"}
   ]}}
-
        │ claude 处理
        ▼
-claude stdout 输出 (逐行):
+claude stdout (逐行):
   {"type":"assistant","message":{"content":[{"type":"text","text":"让我先读取"}]}}
   {"type":"assistant","message":{"content":[{"type":"tool_use","name":"Read","input":{...}}]}}
-  {"type":"assistant","message":{"content":[{"type":"text","text":"发现死锁风险..."}]}}
   {"type":"result","subtype":"success"}
-
-       │ Mac 助手翻译为手机协议格式
+       │ translate 层翻译 + 扇出广播
        ▼
-WebSocket 发给手机:
+WebSocket 发给所有订阅者:
   {"type":"thinking"}
   {"type":"token","content":"让我先读取"}
-  {"type":"tool_use","tool":"Read","input":"{\"file_path\":\"...\"}"}
-  {"type":"token","content":"发现死锁风险..."}
+  {"type":"tool_use","tool":"Read","input":"..."}
   {"type":"done"}
 ```
 
-### 4.6 会话生命周期
+**translate 层容错**：遇到非法 JSON 行 → 跳过 + WARN 日志；连续 N 行解析失败 → 通知手机 error + 暂停会话。遇到 `type` 未知的 JSON 行 → 保留原始 type，加 `unrecognized:true` 标记透传给手机，保证新版本 Claude 的新消息类型不会丢弃，手机端也能知道原始 type 名称：
 
-```
-        手机创建会话
-             │
-             ▼
-        ┌─────────┐   手机断线 30 分钟    ┌──────────┐
-        │ 活跃     │──────────────────►│  休眠     │
-        │ claude   │                    │ 进程已kill │
-        │ 进程运行  │                    │ 数据在磁盘  │
-        └─────────┘                    └────┬─────┘
-             │                              │
-             │ 手机重连（无需操作）            │ 手机再次选择会话
-             │                              │ claude --resume
-             ▼                              ▼
-        ┌─────────┐                    ┌──────────┐
-        │ 活跃     │                    │ 唤醒中     │
-        │ 恢复连接  │                    │ 启动中...  │
-        └─────────┘                    └────┬─────┘
-                                           │ ~1-2 秒
-                                           ▼
-                                      ┌─────────┐
-                                      │ 活跃     │
-                                      └─────────┘
+```json
+{"type":"some_new_type","unrecognized":true,"raw":"{\"type\":\"some_new_type\",...}"}
 ```
 
-**断线不立即杀进程**。你锁屏、切微信、地铁进隧道 → 回来看，会话还在。但如果 30 分钟不回来，进程被清理，下次点开会话时自动 `--resume` 恢复。
+### 4.7 会话生命周期
 
-### 4.7 中断机制（cancel）
+```
+      手机创建会话
+           │
+           ▼
+      ┌─────────┐   所有订阅者断线 30 分钟    ┌──────────┐
+      │ 活跃     │────────────────────────►│  休眠     │
+      │ claude   │                         │ 进程已kill │
+      │ 进程运行  │                         │ 数据在磁盘  │
+      └─────────┘                         └────┬─────┘
+           │                                    │
+           │ 设备重连                             │ 设备选择会话
+           │                                    │ claude --resume
+           ▼                                    ▼
+      ┌─────────┐                         ┌──────────┐
+      │ 活跃     │                         │ 唤醒中     │
+      │ 恢复连接  │                         │ 启动中...  │
+      └─────────┘                         └────┬─────┘
+                                               │ ~1-2s
+                                               ▼
+                                          ┌─────────┐
+                                          │ 活跃     │
+                                          └─────────┘
+```
+
+### 4.8 中断机制
 
 ```
 手机发送 {"type":"control","action":"cancel"}
-  → 关闭 claude stdin (EOF)
+  → close(claude stdin) (EOF)
   → 等待 claude 自行终止当前轮次（最多 10s）
   → 超时 → SIGTERM → 5s 后仍存活 → SIGKILL
-  → 重新启动: claude --resume <sessionId>
-  → 手机收到 {"type":"done"} 确认中断完成
+  → claude --resume 恢复
+  → 所有订阅者收到 {"type":"done"}
 ```
 
-### 4.8 权限管理
+### 4.9 权限管理
 
-Claude Code 运行时会弹出权限确认（执行 Bash、写文件、网络请求等）。如果手机不能处理这些确认，会话就会卡死。
-
-#### 4.8.1 三种权限模式
-
-新建会话时可选：
+#### 三种权限模式（创建会话时选择）
 
 ```
-新建会话 ──► 选择权限级别:
-              ● 🟢 信任模式 (--permission-mode bypassPermissions)
-                所有操作自动执行，零确认
-              ○ 🟡 审阅模式 (--permission-mode acceptEdits)
-                编辑自动通过，危险操作 (rm、curl 等) 需确认
-              ○ 🔴 严格模式 (--permission-mode default)
-                每步操作都需手动确认
+● 🟢 信任模式 (bypassPermissions)  ← 推荐，零确认
+○ 🟡 审阅模式 (acceptEdits)        ← 编辑自动过，危险操作需确认
+○ 🔴 严格模式 (default)            ← 每步都需确认
 ```
 
-大多数场景用 🟢 信任模式——本地开发信任 Claude 没问题。偶尔不确定的时候切到 🟡。
-
-#### 4.8.2 权限请求的交互
-
-当选了 🟡 或 🔴 模式，Claude 发起需要确认的操作时，手机上弹出确认卡片：
+#### 权限请求交互（审阅/严格模式）
 
 ```
 ┌──────────────────────────────┐
@@ -290,186 +368,129 @@ Claude Code 运行时会弹出权限确认（执行 Bash、写文件、网络请
 │ 🔧 Bash 命令                  │
 │ rm -rf /tmp/build-cache      │
 │                              │
-│ 清理构建缓存目录               │
-│                              │
 │  [✅ 允许]   [❌ 拒绝]        │
 │  [🔄 始终允许此类操作]         │
 └──────────────────────────────┘
 ```
 
-#### 4.8.3 确认流程
+- 多设备场景：广播给所有订阅者，先回复先生效，其他设备收到 `permission_resolved` 自动关闭卡片
+- 批量操作合并为一张卡片
+- 60s 无响应自动拒绝
+- "始终允许" → 记忆规则，后续同类操作自动处理
+
+### 4.10 健康监控
+
+对每个 claude 进程维护 `lastOutputTime`、`lastTokenTime`、`toolStartTime`、`subAgents`。独立 goroutine 每 30s 扫描：
+
+| 状态 | 判定条件 | 自动处理 | 通知用户 |
+|------|---------|---------|---------|
+| 🟢 正常 | 有输出 < 60s | — | — |
+| 🟡 可能卡死 | 无输出 > 2min | — | 状态条提醒 |
+| 🔴 确认卡死 | 无输出 > 5min | — | 弹窗 + 推送 |
+| 🔧 工具超时 | 工具 > 3min | — | 状态条 |
+| 🔧 工具卡死 | 工具 > 10min | SIGTERM | 通知 |
+| 👻 子 agent 丢失 | 无事件 > 3min | 注入提醒给主 agent | 状态条 |
+| 👻 子 agent 卡死 | 无事件 > 8min | 通知主 agent 重试 | 通知 |
+
+用户可点"强制中断" → SIGTERM → resume；或"继续等待" → 重置计时器。
+
+### 4.11 Mac 睡眠策略
+
+- **有活跃会话时**：`caffeinate -s -w <claude-pid>` 阻止系统睡眠（显示器可关）
+- **无活跃会话时**：允许正常睡眠
+- **Mac 已睡眠时手机请求**：手机显示"Mac 不可用" + 重试按钮（每 30s ping）
+- **Mac 唤醒后**：tsnet 自动重连，WebSocket 恢复，claude 进程若被 kill 则 `--resume`
+
+| 场景 | 手机端展示 |
+|------|-----------|
+| Mac 在线 | 顶栏绿点 |
+| Mac 睡眠/离线 | 红点 + "Mac 不可用" + [重试] |
+| 重连中 | 黄点 + "正在重连..." |
+
+### 4.12 消息历史
+
+**Mac 端存储**（追加写入，无需锁）：
 
 ```
-claude stdout 输出请求:
-  {"type":"permission_request","request_id":"req001",...}
-
-助手:
-  1. 暂停写 claude stdin（不让新消息干扰）
-  2. WebSocket 发给手机 → 弹出确认卡片
-  3. 等待手机回复
-     - 允许 → 写回 claude stdin: {"type":"permission_response","response":"allow"}
-     - 拒绝 → 写回: {"type":"permission_response","response":"deny"}
-  4. claude 恢复执行
-
-安全兜底: 60 秒无响应 → 自动拒绝，不卡会话
+~/.claude-phone/sessions/<sessionId>/
+├── meta.json          # name, cwd, createdAt, permissionMode, owner
+└── messages.jsonl     # 每行一条 JSON
 ```
 
-#### 4.8.4 批量确认
-
-如果 Claude 一次发起多个操作，合并成一张卡片：
-
-```
-┌──────────────────────────────┐
-│ ⚠️ Claude 需要执行 3 个操作    │
-│                              │
-│ 🔧 mkdir -p /tmp/output      │
-│ 📝 写入 src/Result.java      │
-│ 🔧 ./gradlew test            │
-│                              │
-│  [✅ 全部允许]  [❌ 全部拒绝]  │
-│  [逐个确认 ▸]                │
-└──────────────────────────────┘
+```jsonl
+{"msgId":"msg001","ts":"2026-07-08T15:30:00Z","dir":"in","type":"text","content":"检查并发安全性"}
+{"msgId":"msg002","ts":"2026-07-08T15:30:02Z","dir":"out","type":"thinking"}
+{"msgId":"msg003","ts":"2026-07-08T15:30:03Z","dir":"out","type":"token","content":"让我先读取"}
 ```
 
-#### 4.8.5 协议扩展
+- 每条消息有递增 `msgId`，用于增量同步
+- 手机端**不持久化**，进入会话时从 Mac 拉取（`select_session` 返回 `messageCount` + `lastMsgId`，手机再发 `load_history` 拉取最近 N 条），向上滚动懒加载
+- 断线期间的消息：重连后基于 `lastMsgId` 拉取增量
+- 清理：用户手动删除，不自动清理
 
-```json
-// Mac → 手机: 权限请求
-{"type":"permission_request","requestId":"req001","tool":"Bash","command":"rm -rf /tmp/cache","description":"清理构建缓存"}
+### 4.13 断线重连
 
-// Mac → 手机: 批量权限请求
-{"type":"permission_batch","batchId":"batch001","requests":[
-  {"requestId":"req001","tool":"Bash","command":"mkdir -p /tmp/output"},
-  {"requestId":"req002","tool":"Write","path":"src/Result.java"},
-  {"requestId":"req003","tool":"Bash","command":"./gradlew test"}
-]}
+**手机端**：指数退避重连（1s → 2s → 4s → ... → 最大 30s），5 分钟仍失败则停止并显示[手动重试]。网络切换时立即重置退避。
 
-// 手机 → Mac: 单个回复
-{"type":"permission_response","requestId":"req001","response":"allow"}
+**Mac 端**：WS 断开时不立即清理会话，让 claude 继续运行；30 分钟后仍无连接才清理孤儿会话。
 
-// 手机 → Mac: 单个拒绝 (可选原因)
-{"type":"permission_response","requestId":"req001","response":"deny","reason":"不想删缓存"}
+### 4.14 并发消息
 
-// 手机 → Mac: 批量回复
-{"type":"permission_batch_response","batchId":"batch001","responses":[
-  {"requestId":"req001","response":"allow"},
-  {"requestId":"req002","response":"allow"},
-  {"requestId":"req003","response":"deny","reason":"手动运行测试"}
-]}
+`claude --print` 一次处理一条消息，期间新消息排队：
 
-// 手机 → Mac: 记忆决策 (后续同类操作自动允许)
-{"type":"permission_rule","tool":"Bash","pattern":"/tmp/*","response":"allow"}
-```
+- Claude 回复期间：输入框可用，新消息标记"排队中"（灰色气泡）
+- 当前轮结束：自动发送队列中的下一条
+- 用户可取消排队：长按 → "取消发送"
 
-### 4.9 健康监控与死锁处理
+### 4.15 认证与安全
 
-Claude 可能在运行中假死（API 超时、子 agent 卡住、死循环等）。助手必须能感知并处理。
+**两层认证**：
 
-#### 4.9.1 三条心跳线
-
-助手对每个 claude 进程维护三个时间戳：
+1. **Tailscale 网络层**：Mac tsnet 用 `Dir` 持久化状态，重启无需新 key；手机端通过 Auth Key 首次配对加入网络
+2. **应用层**：WS 连接建立时验证 device token
 
 ```
-ClaudeSession {
-    ...
-    lastOutputTime   time.Time  // 任何 stdout 输出 (thinking/tool_use)
-    lastTokenTime    time.Time  // 最后一次文本 token
-    toolStartTime    time.Time  // 当前工具开始时间
-    subAgents        map[string]*SubAgentStatus
-}
+配对流程:
+  1. Mac: claude-phone-agent key → 一次性 Auth Key (1h 过期)
+  2. 手机粘贴 Key → 点连接 → 加入 Tailscale 网络
+  3. Mac 生成 device token → 双方持久化
+  4. 后续连接: WS 第一条消息 {"type":"auth","deviceToken":"dt_xxx"}
 ```
 
-一个独立的健康检查 goroutine，每 30 秒扫描所有活跃会话：
+**安全清单**：
 
-| 状态 | 判定条件 | 含义 |
-|------|---------|------|
-| 🟢 正常 | `now - lastOutputTime < 60s` | claude 在活动 |
-| 🟡 可能卡死 | `now - lastOutputTime > 2min` | 长时间无输出 |
-| 🔴 确认卡死 | `now - lastOutputTime > 5min` | 基本确认已挂 |
-| 🔧 工具超时 | `now - toolStartTime > 3min` | 某命令执行过久 |
-| 👻 子 agent 丢失 | 子 agent 创建后 3min 无任何事件 | 子 agent 可能挂了 |
+| 项 | 说明 |
+|----|------|
+| WireGuard 加密 | 所有流量端到端加密 |
+| Tailscale ACL | 限制只有 tag:claude-phone 可访问 claude-mac:9876 |
+| Device token | 防止未授权设备连接 |
+| 权限模式 | 信任/审阅/严格三档 |
 
-#### 4.9.2 状态推送
+### 4.16 工作目录与模板
 
-状态变化时主动通知手机：
-
-```json
-{"type":"health","sessionId":"abc","status":"stale","idleSeconds":180,"detail":"已 3 分钟无响应"}
-{"type":"health","sessionId":"abc","status":"tool_stuck","toolName":"Bash","idleSeconds":300,"detail":"命令已执行 5 分钟"}
-{"type":"health","sessionId":"abc","status":"subagent_lost","agentName":"code-reviewer","idleSeconds":240}
+```yaml
+# ~/.claude-phone/projects.yaml
+projects:
+  - name: "开放平台"
+    path: /Users/binyangbin/insurance-project/insurance-open-platform
+  - name: "保险大仓"
+    paths:
+      - /Users/binyangbin/insurance-project
+      - /Users/binyangbin/develop
 ```
 
-#### 4.9.3 手机上的交互
-
-```
-claude 卡死时，聊天界面底部出现状态条：
-
-🟡 Claude 已 3 分钟无响应，可能卡死
-   可能原因: 子 agent 超时 / API 挂起 / 死循环
-   [⏳ 继续等待]  [🔪 强制中断]
-
-点"强制中断":
-  → 助手发 SIGTERM → 5s → SIGKILL
-  → 自动 claude --resume 恢复
-  → 手机确认: "已中断并恢复，请继续对话"
+```yaml
+# ~/.claude-phone/templates.yaml
+templates:
+  - label: "🔨 跑测试"
+    prompt: "运行当前项目的全部单元测试，报告失败情况"
+  - label: "🔍 Code Review"
+    prompt: "Review 当前分支的改动，找出潜在 bug"
 ```
 
-#### 4.9.4 子 Agent 监控
+配置修改后通过 `fsnotify` 热加载，无需重启。
 
-从 claude stdout 解析子 agent 事件，助手维护清单：
-
-```
-subAgents:
-  agent-001: 创建于 15:30, 最后事件 15:32, 状态: 运行中
-  agent-002: 创建于 15:28, 最后事件 15:35, 状态: idle (已完成)
-```
-
-子 agent 超时时，助手注入系统消息提醒主 agent：
-
-```json
-// 写入 claude stdin
-{"type":"system","message":"子 agent 'code-reviewer' 已 4 分钟无响应。请检查或重试。"}
-```
-
-#### 4.9.5 分级处理策略
-
-| 状态 | 自动处理 | 通知用户 |
-|------|---------|---------|
-| 🟡 2min 无输出 | 无 | 轻提醒（小字状态条） |
-| 🔴 5min 无输出 | 无（等用户决策） | 强提醒（弹窗 + 推送通知） |
-| 🔧 工具 > 3min | 无（可能是大文件操作） | 状态条告知 |
-| 🔧 工具 > 10min | 自动 SIGTERM 该工具 | 通知 + 自动继续 |
-| 👻 子 agent > 3min | 注入提醒给主 agent | 状态条告知 |
-| 👻 子 agent > 8min | 自动通知主 agent 重试 | 通知 |
-
-#### 4.9.6 协议扩展
-
-```json
-// Mac → 手机: 健康状态
-{"type":"health","sessionId":"abc","status":"stale|tool_stuck|subagent_lost|normal",
- "idleSeconds":180,"toolName":"Bash","agentName":"code-reviewer","detail":"..."}
-
-// 手机 → Mac: 用户处置
-{"type":"control","action":"force_kill","sessionId":"abc"}
-{"type":"control","action":"wait_longer","sessionId":"abc"}  // 重置计时器，再等 5 分钟
-```
-
-#### 4.9.7 Mac 资源仪表盘（手机设置页）
-
-```
-┌──────────────────────────────┐
-│  Mac 资源状态                │
-│                              │
-│  claude 进程: 3 个运行中      │
-│  内存占用: 856 MB / 16 GB    │
-│  CPU: 12%                    │
-│  磁盘: 234 GB 可用           │
-│                              │
-│  子 agent 活动: 2 个活跃     │
-└──────────────────────────────┘
-```
-
-### 4.10 启动与自启
+### 4.17 启动与自启
 
 ```xml
 <!-- ~/Library/LaunchAgents/com.claude.phone-agent.plist -->
@@ -481,14 +502,10 @@ subAgents:
     <array>
         <string>/usr/local/bin/claude-phone-agent</string>
     </array>
-    <key>RunAtLoad</key>
-    <true/>
-    <key>KeepAlive</key>
-    <true/>
+    <key>RunAtLoad</key><true/>
+    <key>KeepAlive</key><true/>
     <key>EnvironmentVariables</key>
     <dict>
-        <key>TS_AUTHKEY</key>
-        <string>tskey-auth-permanent-xxx</string>
         <key>HOME</key>
         <string>/Users/binyangbin</string>
     </dict>
@@ -496,22 +513,7 @@ subAgents:
 </plist>
 ```
 
-### 4.11 工作目录配置
-
-```yaml
-# ~/.claude-phone/projects.yaml
-projects:
-  - name: "开放平台"
-    path: /Users/binyangbin/insurance-project/insurance-open-platform
-  - name: "网关 SDK"
-    path: /Users/binyangbin/insurance-project/insurance-gateway-executor
-  - name: "保险大仓 (全部项目)"
-    paths:
-      - /Users/binyangbin/insurance-project
-      - /Users/binyangbin/develop
-```
-
-手机新建会话时从预设列表中选择工作目录。可以选单项目、父目录、或多目录组合。助手不关心路径层级——原样传给 `claude --add-dir`。
+tsnet 通过 `Dir` 持久化认证状态，不需要在 plist 里放 Auth Key。
 
 ---
 
@@ -520,128 +522,157 @@ projects:
 ### 5.1 手机 → Mac
 
 ```json
-// 新建会话 (附带工作目录)
-{"type":"control","action":"create_session","name":"车险理赔联调","workingDir":"/path/to/project"}
+// 认证（WS 连接后第一条消息）
+{"type":"auth","deviceToken":"dt_abc123...","deviceName":"Pixel 8"}
 
-// 选择已有会话
+// 新建会话
+{"type":"control","action":"create_session","name":"车险联调","workingDir":"/path","permissionMode":"bypassPermissions"}
+
+// 选择会话（加入订阅）
 {"type":"control","action":"select_session","sessionId":"550e8400-..."}
 
-// 停止会话 (kill claude 进程 + 从 map 移除)
+// 加入会话（非 owner 订阅）
+{"type":"control","action":"join_session","sessionId":"550e8400-..."}
+
+// 离开会话（取消订阅）
+{"type":"control","action":"leave_session","sessionId":"550e8400-..."}
+
+// 停止会话（仅 owner）
 {"type":"control","action":"stop_session","sessionId":"550e8400-..."}
 
 // 列出所有会话
 {"type":"control","action":"list_sessions"}
 
-// 获取可用工作目录列表
+// 获取工作目录列表
 {"type":"control","action":"list_projects"}
 
-// 发送文本消息 (当前选中会话)
-{"type":"text","content":"帮我检查 XxxService 的并发问题"}
+// 发送文本
+{"type":"text","content":"帮我检查并发问题"}
 
-// 语音消息 (已由 Android 端识别为文字)
+// 语音消息（已识别为文字）
 {"type":"voice","content":"语音识别后的文字"}
 
 // 中断当前响应
 {"type":"control","action":"cancel"}
 
-// 权限回复 (单个)
-{"type":"permission_response","requestId":"req001","response":"allow"}
+// 权限回复
+{"type":"permission_response","requestId":"req001","response":"allow|deny","reason":"..."}
 
-// 权限回复 (拒绝 + 原因)
-{"type":"permission_response","requestId":"req001","response":"deny","reason":"不想删缓存"}
-
-// 权限回复 (批量)
+// 批量权限回复
 {"type":"permission_batch_response","batchId":"batch001","responses":[
   {"requestId":"req001","response":"allow"},
-  {"requestId":"req003","response":"deny"}
+  {"requestId":"req003","response":"deny","reason":"手动测试"}
 ]}
 
-// 记忆决策 (后续同类操作自动处理)
+// 记忆决策
 {"type":"permission_rule","tool":"Bash","pattern":"/tmp/*","response":"allow"}
+
+// 请求历史消息
+{"type":"control","action":"load_history","sessionId":"abc","limit":50,"beforeMsgId":"msg020"}
 
 // 心跳
 {"type":"control","action":"ping"}
 
-// Git 操作 (V1)
-{"type":"control","action":"git","gitAction":"status|diff|log","sessionId":"abc"}
+// 强制中断卡死的会话
+{"type":"control","action":"force_kill","sessionId":"abc"}
+
+// 继续等待（重置计时器）
+{"type":"control","action":"wait_longer","sessionId":"abc"}
 ```
 
 ### 5.2 Mac → 手机
 
 ```json
+// 连接建立
+{"type":"hello","agentVersion":"0.1.0","claudeVersion":"1.0.45","protocolVersion":"1"}
+
 // 工作目录列表
-{"type":"project_list","projects":[{"name":"开放平台","path":"/..."},{"name":"保险大仓","paths":["...","..."]}]}
+{"type":"project_list","projects":[{"name":"开放平台","path":"/..."},...]}
 
 // 会话列表
 {"type":"session_list","sessions":[
-  {"sessionId":"...","name":"车险理赔联调","status":"active","createdAt":1720000000},
-  {"sessionId":"...","name":"产品配置","status":"sleeping","createdAt":1720000001}
+  {"sessionId":"abc","name":"车险联调","status":"active","owner":"device-A",
+   "subscribers":["device-A","device-B"],"createdAt":1720000000}
 ]}
 
 // 会话创建成功
-{"type":"session_created","sessionId":"550e8400-...","name":"车险理赔联调","cwd":"/path/to/project"}
+{"type":"session_created","sessionId":"550e8400-...","name":"车险联调","cwd":"/path"}
 
-// 会话已选中 (进入聊天)
-{"type":"session_selected","sessionId":"550e8400-...","name":"车险理赔联调"}
+// 会话已选中
+{"type":"session_selected","sessionId":"550e8400-...","name":"车险联调","messageCount":42,"lastMsgId":"msg042"}
 
 // 会话已停止
 {"type":"session_stopped","sessionId":"550e8400-..."}
 
-// 流式响应 - 开始思考
+// 流式响应
 {"type":"thinking"}
-
-// 流式响应 - 文本增量
 {"type":"token","content":"部分文本"}
-
-// 流式响应 - 工具调用通知
 {"type":"tool_use","tool":"Bash","input":"ls -la"}
-
-// 流式响应 - 完成
 {"type":"done"}
 
-// 错误
-{"type":"error","message":"错误描述"}
+// 错误（含错误码）
+{"type":"error","code":"SESSION_NOT_FOUND","message":"会话不存在"}
 
-// 权限请求 (单个操作)
-{"type":"permission_request","requestId":"req001","tool":"Bash","command":"rm -rf /tmp/cache","description":"清理构建缓存"}
+// 权限请求
+{"type":"permission_request","requestId":"req001","tool":"Bash","command":"rm -rf /tmp/cache","description":"清理缓存"}
 
-// 权限请求 (批量)
-{"type":"permission_batch","batchId":"batch001","requests":[
-  {"requestId":"req001","tool":"Bash","command":"mkdir -p /tmp/output"},
-  {"requestId":"req002","tool":"Write","path":"src/Result.java"},
-  {"requestId":"req003","tool":"Bash","command":"./gradlew test"}
-]}
+// 批量权限请求
+{"type":"permission_batch","batchId":"batch001","requests":[...]}
 
-// 心跳响应
-{"type":"pong"}
+// 权限已被其他设备处理
+{"type":"permission_resolved","requestId":"req001","response":"allow","resolvedBy":"device-B"}
 
-// 健康状态推送
-{"type":"health","sessionId":"abc","status":"stale","idleSeconds":180,"detail":"已 3 分钟无响应"}
+// 消息排队
+{"type":"queued","msgId":"msg043","position":1}
+{"type":"dequeued","msgId":"msg043"}
+
+// 历史消息
+{"type":"history","sessionId":"abc","messages":[
+  {"msgId":"msg001","ts":"...","dir":"in","type":"text","content":"..."},
+  {"msgId":"msg002","ts":"...","dir":"out","type":"token","content":"..."}
+],"hasMore":true}
+
+// 健康状态
+{"type":"health","sessionId":"abc","status":"stale|tool_stuck|subagent_lost|normal",
+ "idleSeconds":180,"detail":"..."}
 
 // 任务完成通知
 {"type":"notification","sessionId":"abc","sessionName":"车险联调","summary":"重构完成","actionCount":3,"duration":"6m"}
 
-// 命令模板列表
-{"type":"templates","templates":[{"label":"🔨 跑测试","prompt":"运行全部单元测试..."}]}
+// 命令模板
+{"type":"templates","templates":[{"label":"🔨 跑测试","prompt":"..."}]}
 
-// Git 操作结果
-{"type":"git_result","action":"status","result":"On branch pre\n..."}
+// 心跳
+{"type":"pong"}
 ```
+
+### 5.3 错误码
+
+| Code | 含义 |
+|------|------|
+| `SESSION_NOT_FOUND` | 会话不存在 |
+| `SESSION_NOT_OWNER` | 非 owner 尝试停止会话 |
+| `DEVICE_NOT_AUTHORIZED` | device token 无效 |
+| `CLAUDE_NOT_FOUND` | claude CLI 未安装 |
+| `CLAUDE_VERSION_MISMATCH` | claude 版本不兼容 |
+| `TRANSLATE_ERROR` | translate 层解析失败 |
+| `MAC_SLEEPING` | Mac 处于睡眠状态 |
 
 ---
 
 ## 6. 手机客户端设计
 
-### 6.1 架构
+### 6.1 Android 架构
 
 ```
 APK
-├── Kotlin Shell (~50 行)
-│   ├── MainActivity: WebView + VpnService + 权限请求
+├── Kotlin (~200 行)
+│   ├── MainActivity: WebView + 权限请求
+│   ├── IPNService: VpnService 子类 + tun fd 管理 + protect 回调
 │   └── JS Bridge: Go 核心 ↔ WebView 消息转发
 │
 ├── Go 核心 (gomobile → .aar)
-│   ├── tsnet 客户端: 加入 Tailscale 网络
+│   ├── Tailscale 引擎: ipnlocal.LocalBackend + wireguard-go/tun + netstack
 │   ├── WebSocket 客户端: 连接 claude-mac:9876
 │   └── 协议处理: 收/发 JSON 消息，通过 JS Bridge 与 UI 通信
 │
@@ -651,34 +682,75 @@ APK
     └── 设置 (Mac 连接管理)
 ```
 
-### 6.2 三屏结构
+**VpnService.protect() — 防路由环路**：
+
+Android VpnService 创建的 tun 接口会拦截所有网络流量。如果 Go 核心创建的 socket（WebSocket 连接、Tailscale peer 通信等）也被 tun 拦截，就会形成路由环路——数据发出后又被自己的 tun 截回来，无限循环。
+
+**protect 必须覆盖 Tailscale 引擎的所有 socket，不能只保护应用层的 WebSocket。** Tailscale 引擎内部会创建大量 socket：wireguard-go 的 UDP peer 通信、netstack 的 TCP 连接、magicsock 的 disco 包等。如果这些不 protect，同样会环路。
+
+正确做法：protect 回调注入到 `wgengine` 的 dialer 接口层面，引擎创建的所有 socket 统一走 protect（参照 Tailscale 官方 Android 客户端的 `vpnfacade.go` 实现）：
+
+```go
+// Go 核心: protect 回调注册到 wgengine dialer（不是只包一个 net.Dial）
+type VPNFacade struct {
+    protect func(fd int) bool  // Kotlin → Go 的回调
+}
+
+// VPNFacade 实现 router.Router + dns.OSConfigurator
+// wgengine 创建 socket 时，通过 dialer 接口调用 protect
+
+func (v *VPNFacade) Dialer() *tlsdialer.Dialer {
+    return &tlsdialer.Dialer{
+        ProtectFunc: v.protect,  // ★ 所有引擎 socket 都走这里
+    }
+}
+```
+
+```kotlin
+// Kotlin 侧: IPNService 中实现 protect
+class IPNService : VpnService(), libtailscale.IPNService {
+    override fun protect(fd: Int): Boolean {
+        return protect(fd)  // VpnService.protect() 排除 socket 出 VPN 隧道
+    }
+}
+```
+
+**遗漏 protect 的后果**：连接卡死在路由环路，表现为"连接中..."永远不成功，且无任何错误输出。这是 Android VPN 开发最常见的坑。
+
+### 6.2 iOS 架构（V2）
+
+```
+IPA
+├── SwiftUI 原生 UI
+│   ├── 会话列表 + 聊天界面 + 权限确认卡片
+│   └── SFSpeechRecognizer 语音输入
+│
+└── Go 核心 (gomobile → .framework)  ← 和 Android 共享同一份代码
+    ├── Tailscale 引擎 (NetworkExtension + tun fd)
+    ├── WebSocket Client
+    └── 协议处理 (pkg/protocol)
+```
+
+iOS V1 不做的原因：分发需 TestFlight/App Store，UI 需 SwiftUI 重写，语音需 SFSpeechRecognizer。策略：V1 Android 跑通 → V2 Go 核心复用 + SwiftUI UI。
+
+### 6.3 三屏结构
 
 ```
 ┌──────────────┐     ┌──────────────────┐     ┌──────────────┐
 │  会话列表      │     │  聊天界面         │     │  设置         │
 │  (首页)       │     │                  │     │              │
-│              │     │  ┌────────────┐  │     │ Mac 连接状态  │
-│ + 新建会话    │     │  │ 用户消息     │  │     │              │
-│              │     │  │ (右,蓝)     │  │     │ 工作目录管理  │
-│ ┌──────────┐ │     │  └────────────┘  │     │              │
-│ │ 车险联调  │ │     │                  │     │ 关于          │
-│ │ 活跃 · 2h│─┤────→│  ┌────────────┐  │     │              │
-│ └──────────┘ │     │  │ Claude 回复  │  │     │              │
-│ ┌──────────┐ │     │  │ (左,灰)     │  │     │              │
-│ │ 产品配置  │ │     │  │ 正在流式输入▌│  │     │              │
-│ │ 休眠 · 1d│ │     │  └────────────┘  │     │              │
-│ └──────────┘ │     │                  │     │              │
-│              │     │  🔧 Bash: ls     │     │              │
+│ + 新建会话    │     │  用户消息 (右,蓝) │     │ Mac 连接状态  │
+│              │     │                  │     │ 工作目录管理  │
+│ 车险联调      │────→│  Claude 回复     │     │ 诊断信息     │
+│ 活跃 · 2h    │     │  (左,灰) 流式▌   │     │ 关于          │
 │              │     │                  │     │              │
+│ 产品配置      │     │  🔧 Bash: ls     │     │              │
+│ 休眠 · 1d    │     │                  │     │              │
 │              │     │  [🎤] [___] [➤] │     │              │
 └──────────────┘     └──────────────────┘     └──────────────┘
 ```
 
-- **首页**：会话列表。每个会话显示名字 + 状态 + 时间。左滑/长按停止。点 "+" 新建。
-- **聊天界面**：进入一个会话。消息气泡 + 流式输入 + 语音按钮。
-- **设置**：偶尔访问，管理连接和工作目录。
-
-### 6.3 新建会话流程
+### 6.4 新建会话
 
 ```
 ┌──────────────────────────┐
@@ -687,57 +759,48 @@ APK
 │  名称：[_______________] │
 │                          │
 │  工作目录：               │
-│  ┌────────────────────┐  │
-│  │ ● 开放平台           │  │
-│  │ ○ 网关 SDK          │  │
-│  │ ○ 保险大仓 (父目录)   │  │
-│  └────────────────────┘  │
+│  ● 开放平台               │
+│  ○ 网关 SDK              │
+│  ○ 保险大仓 (父目录)     │
 │                          │
 │  权限级别：               │
-│  ● 🟢 信任模式 (推荐)     │
-│  ○ 🟡 审阅模式            │
-│  ○ 🔴 严格模式            │
+│  ● 🟢 信任模式 (推荐)    │
+│  ○ 🟡 审阅模式           │
+│  ○ 🔴 严格模式           │
 │                          │
 │        [ 创 建 ]         │
 └──────────────────────────┘
 ```
 
-### 6.4 聊天界面状态
+### 6.5 聊天界面状态
 
 | Claude 状态 | UI 展示 |
 |------------|---------|
-| 正在思考 | 消息列表底部出现闪烁光标 `▌` |
-| 流式输出 | 文本逐 token 追加到当前气泡，光标持续闪烁 |
-| 工具调用 | 系统消息样式（居中、小字），折叠显示，可展开 |
-| 响应完成 | 光标消失，输入框恢复可用 |
-| 发送失败 | 消息气泡右侧红色 ❗，点击重试 |
-| 权限请求 | 聊天界面弹出确认卡片，展示操作详情 + [允许]/[拒绝] 按钮。60 秒无响应自动拒绝 |
-| 断线 | 顶栏状态点变红，底部黄色提示"连接断开，正在重连..." |
-| 重连成功 | 提示消失，状态点变绿，继续之前的对话 |
+| 正在思考 | 底部闪烁光标 `▌` |
+| 流式输出 | 逐 token 追加，光标闪烁（用 `requestAnimationFrame` 节流） |
+| 工具调用 | 居中小字，折叠显示，可展开 |
+| 响应完成 | 光标消失，输入框恢复 |
+| 权限请求 | 弹出确认卡片 |
+| 断线 | 顶栏红点 + "正在重连..." |
+| 排队消息 | 灰色气泡 + "等待中" |
 
-### 6.5 语音输入
+### 6.6 语音输入
 
-- 使用 WebView 原生 `Web Speech API`，无需额外权限（除麦克风）
-- **按住说 → 松手识别 → 文字出现在输入框 → 手动点发送**（可以修改识别结果）
-- 识别为空 → toast "未检测到语音"
-- 录音时 mic 按钮有脉冲圆环动画
+- **Android**：WebView 原生 `Web Speech API`（按住说 → 松手识别 → 文字出现在输入框 → 手动发送）
+- **iOS**：`SFSpeechRecognizer`
 
-### 6.6 首次配对
+### 6.7 首次配对
 
 ```
-首次打开 App：
 ┌──────────────────────────┐
-│                          │
-│   欢迎使用 Claude Phone  │
+│   欢迎使用 Claude Phone   │
 │                          │
 │  ┌────────────────────┐  │
 │  │ tskey-auth-xxxx... │  │  ← 粘贴 Auth Key
 │  └────────────────────┘  │
 │                          │
-│  如何获取：               │
-│  Mac 端运行：             │
+│  获取方式: Mac 终端运行    │
 │  claude-phone-agent key  │
-│  会生成一次性 Auth Key    │
 │                          │
 │  ┌────────────────────┐  │
 │  │       连 接         │  │
@@ -745,393 +808,135 @@ APK
 └──────────────────────────┘
 ```
 
-流程：
-1. Mac 终端跑 `claude-phone-agent key` → 输出一次性 Auth Key（1 小时过期）
-2. 手机粘贴 Key → 点连接
-3. tsnet 自动加入你的 Tailscale 网络
-4. 手机通过主机名 `claude-mac` 发现 Mac
-5. 连接成功 → 进入会话列表
+### 6.8 WebView 性能
 
-不需要扫码（异步场景更灵活），不需要输入 IP（tsnet 自动解析主机名）。
+聊天场景对 WebView 有压力，V1 需要两个基本策略：
 
----
+- **虚拟列表**：只渲染可视区域 ± buffer 的消息，避免长会话 DOM 膨胀
+- **token 追加用 `requestAnimationFrame`**：避免每个 token 触发重排
 
-## 7. 扩展功能规划
-
-以下功能不在 V1 范围，但架构预留了扩展点。
+超长代码块默认折叠（显示前 20 行 + "展开全部"）。
 
 ---
 
-### 7.1 任务完成推送通知
+## 7. 实现阶段
 
-Claude 长时间任务完成后，手机收到推送。
+| Phase | 内容 | 预计 |
+|------|------|------|
+| **P0a** | gomobile bind 最小 POC：HelloWorld Go → .aar → Kotlin 调用成功 | 0.5 天 |
+| **P0b** | fork libtailscale，精简后 gomobile bind → .aar → VpnService + tun fd 传递成功 | 1 天 |
+| **P0c** | Mac tsnet + Android Tailscale 引擎跨网络连接成功 | 0.5 天 |
+| **P1** | Mac 助手核心：`pkg/protocol` + `pkg/session` + tsnet + claude 进程管理 + translate 层 + websocat 测试 | 2-3 天 |
+| **P2** | Mac 助手完整：权限管理 + 健康监控 + 消息历史 + 断线重连 + caffeinate + 配置热加载 | 2 天 |
+| **P3** | Android 完整：Go 核心 + Kotlin VpnService + WebView Chat UI + 语音 + 首次配对 | 3-4 天 |
+| **P4** | 打磨：模板按钮 + 推送通知 + 错误处理 + 状态指示 + WebView 性能优化 | 2 天 |
+| **P5** | 开源：README + CONTRIBUTING + 构建文档 + GitHub Release | 1 天 |
+| **P6** | iOS (V2)：Go 核心复用 + SwiftUI Chat UI + SFSpeechRecognizer | 3-4 天 |
 
-**场景**：手机上问"帮我重构 XxxService"，Claude 要跑 5-10 分钟。你锁屏，过一会儿通知栏弹出"重构完成：修改了 3 个文件，测试全部通过"。
-
-**实现**：助手检测到 claude 进程进入 idle 状态 → 提取最后一条 assistant 消息作为 summary → WebSocket 推送 `{"type":"notification","summary":"...","files":[...]}` → 手机发本地通知。
-
-**协议**：
-```json
-// Mac → 手机
-{"type":"notification","sessionId":"abc","sessionName":"车险联调","summary":"重构完成，修改了 3 个文件，测试全部通过",
- "actionCount":3,"duration":"6m"}
-```
-
-**设置**：手机端可按会话开关通知，默认开。
-
----
-
-### 7.2 预设命令模板
-
-减少手机打字，一键发送常用指令。
-
-```
-聊天界面底部固定一排快捷按钮：
-[🔨 跑测试] [📦 构建] [🔍 Review] [📝 文档] [📋 Git Log]
-```
-
-**实现**：配置在 `~/.claude-phone/templates.yaml`：
-
-```yaml
-templates:
-  - label: "🔨 跑测试"
-    prompt: "运行当前项目的全部单元测试，报告失败情况"
-  - label: "🔍 Code Review"
-    prompt: "Review 当前分支的改动，找出潜在 bug 和代码质量问题"
-  - label: "📝 生成文档"
-    prompt: "为当前项目的主要模块生成一份 README 文档"
-  - label: "📋 Git Log"
-    prompt: "查看最近 10 条 git log，总结主要改动"
-```
-
-**协议**：
-```json
-// Mac → 手机 (模板列表)
-{"type":"templates","templates":[{"label":"🔨 跑测试","prompt":"运行当前项目的全部单元测试..."}]}
-```
+每个 Phase 有明确的 pass/fail 标准，P0a/P0b/P0c 是整个项目风险最大的验证点。
 
 ---
 
-### 7.3 Git 快速操作
+## 8. 扩展功能（V2+）
 
-手机上快速查看 git 状态、diff、commit 历史。
-
-```
-设置页"Git 工具"入口:
-┌──────────────────────────────┐
-│  Git 快速操作                 │
-│                              │
-│  [📊 状态] [📝 Diff] [📋 Log] │
-│                              │
-│  当前分支: pre                │
-│  Uncommitted: 3 files        │
-│  上次 commit: fix(sign): ... │
-└──────────────────────────────┘
-```
-
-**实现**：助手直接执行 git 命令（claude 不需要参与），结果原样返回手机。
-
-**协议**：
-```json
-// 手机 → Mac
-{"type":"control","action":"git","gitAction":"status","sessionId":"abc"}
-
-// Mac → 手机
-{"type":"git_result","action":"status","result":"On branch pre\nChanges not staged:\n..."}
-```
-
----
-
-### 7.4 轻量文件浏览器
-
-手机上浏览 Mac 项目目录，点文件预览内容。比让 Claude "帮我看看 xxx 文件"更快。
-
-```
-┌──────────────────────────────┐
-│  ← /src/main/java/service/   │
-│                              │
-│  📁 debug/                   │
-│  📁 config/                  │
-│  📄 DebugExecuteService.java │
-│  📄 GatewayApplier.java      │
-│  📄 DiffCalculator.java      │
-└──────────────────────────────┘
-         │ 点击文件
-         ▼
-┌──────────────────────────────┐
-│  GatewayApplier.java (151行) │
-│                              │
-│  Line 1-50:                  │
-│  package com.xiaoju...       │
-│  import com.alibaba...       │
-│  ...                         │
-└──────────────────────────────┘
-```
-
-**实现**：助手收到 `browse_dir` 请求 → `os.ReadDir()` → 返回文件列表。手机端用 WebView 渲染，支持语法高亮。
-
-**协议**：
-```json
-// 手机 → Mac
-{"type":"control","action":"browse","path":"/src/main/java/com/..."}
-
-// Mac → 手机
-{"type":"browse_result","path":"/src/...","entries":[
-  {"name":"debug","type":"dir"},
-  {"name":"GatewayApplier.java","type":"file","size":4512}
-]}
-
-// 手机 → Mac
-{"type":"control","action":"read_file","path":"/src/.../GatewayApplier.java"}
-
-// Mac → 手机
-{"type":"file_content","path":"/src/...","content":"package com...","language":"java","lines":151}
-```
-
----
-
-### 7.5 消息引用文件
-
-聊天时 @ 文件——"帮我分析 @QuoteService.java 的这个方法"。类似 Slack 的文件引用。
-
-```
-输入框输入 @ → 弹出文件搜索对话框 → 选文件 → 自动插入文件引用
-消息发送为: {"type":"text","content":"分析这个方法","mentions":["src/main/.../QuoteService.java"]}
-```
-
-**实现**：助手收到 mentions 后，自动读取引用文件内容，拼接进 claude 的 prompt：
-
-```
-用户在 <file path='QuoteService.java'> 中提到了这个文件。
-[文件内容]
----
-用户的问题: 分析这个方法
-```
-
----
-
-### 7.6 多 Mac 支持
-
-手机上切换控制多台 Mac。
-
-```
-┌──────────────────────┐
-│  选择 Mac             │
-│                      │
-│  ● 🖥 MacBook (本机) │
-│  ○ 🖥 Mac Mini (办公室)│
-│  ○ 🖥 Mac Studio    │
-│                      │
-│  [+ 添加 Mac]       │
-└──────────────────────┘
-```
-
-**实现**：tsnet 天然支持——每台 Mac 用不同 hostname 加入同一个 Tailscale 网络。手机端维护一个 Mac 列表，切换时断开当前 WS，连新 Mac 的 WS。每台 Mac 各自管理自己的会话列表。
-
-**协议**：
-```json
-// 手机 → Mac (当前连接)
-{"type":"control","action":"list_macs"}
-
-// Mac → 手机 (Mac 端维护同网络的 Mac 列表)
-{"type":"mac_list","macs":[
-  {"hostname":"claude-mac-macbook","name":"MacBook","status":"online"},
-  {"hostname":"claude-mac-mini","name":"Mac Mini","status":"online"}
-]}
-
-// 手机 → 当前 Mac (请求切换)
-{"type":"control","action":"switch_mac","hostname":"claude-mac-mini"}
-```
-
----
-
-### 7.7 定时任务
-
-"每天早上 9 点跑一次 `./gradlew test`，有失败通知我"。
-
-```
-┌──────────────────────────────┐
-│  定时任务                     │
-│                              │
-│  ┌────────────────────────┐  │
-│  │ 每日测试    每天 09:00   │  │
-│  │ 状态: 活跃              │  │
-│  └────────────────────────┘  │
-│  ┌────────────────────────┐  │
-│  │ 周报        周五 17:00   │  │
-│  │ 状态: 暂停              │  │
-│  └────────────────────────┘  │
-│                              │
-│  [+ 新建定时任务]             │
-└──────────────────────────────┘
-```
-
-**实现**：助手内嵌 cron 调度器（`robfig/cron`），配置文件持久化。每个定时任务绑定一个 Claude 会话或直接执行 shell 命令。
-
-```yaml
-# ~/.claude-phone/cron.yaml
-jobs:
-  - name: "每日测试"
-    schedule: "0 9 * * *"
-    workingDir: "/Users/binyangbin/insurance-project/insurance-open-platform"
-    action: "claude"
-    prompt: "运行 ./gradlew test，报告失败情况"
-    notify: true
-```
-
----
-
-### 7.8 Git 事件触发
-
-"当我 push 到 pre 分支时，自动跑一次集成测试"。
-
-**实现**：助手启动一个轻量 HTTP 服务器监听 GitHub webhook。收到 push 事件 → 匹配规则 → 自动创建 Claude 会话执行预定义流程。
-
-```yaml
-# ~/.claude-phone/webhooks.yaml
-webhooks:
-  - name: "pre 分支自动检查"
-    repo: "insurance-open-platform"
-    branch: "pre"
-    action: "claude"
-    prompt: "拉取最新代码，运行 ./gradlew test，报告结果"
-    notify: true
-```
-
----
-
-### 7.9 会话间上下文共享
-
-"把车险联调会话里的死锁发现，同步到产品配置会话"。
-
-**实现**：助手维护一个共享上下文存储（`~/.claude-phone/shared-context/`），用户手动选择将某人会话的关键发现写入共享存储。其他会话启动时自动注入共享上下文。
-
-**手机端操作**：在 Claude 的某条回复上长按 → "共享到其他会话" → 选择目标会话 → 内容以系统消息注入目标会话。
-
----
-
-### 7.10 功能优先级总览
-
-| 优先级 | 功能 | 价值 | V1？ |
+| 优先级 | 功能 | 价值 | 版本 |
 |--------|------|------|------|
-| ⭐⭐⭐ | 任务完成推送通知 | 不用盯着屏幕等 Claude | V1 |
-| ⭐⭐⭐ | 预设命令模板 | 减少手机打字 | V1 |
 | ⭐⭐ | Git 状态/Diff 查看 | 快速了解项目状态 | V2 |
-| ⭐⭐ | 定时任务 | 自动化例行检查 | V2 |
+| ⭐⭐ | 定时任务 (cron) | 自动化例行检查 | V2 |
 | ⭐⭐ | 多 Mac 支持 | 控制多台机器 | V2 |
-| ⭐⭐ | 消息引用文件 | 聊天气泡里 @ 文件 | V2 |
+| ⭐⭐ | 消息引用文件 (@file) | 聊天气泡里引用文件内容 | V2 |
+| ⭐ | 协议版本协商 | 版本兼容 | V2 |
+| ⭐ | 暗黑模式 | 开发者体验 | V2 |
+| ⭐ | 操作审计日志 | 安全合规 | V2 |
 | ⭐ | 文件浏览器 | 手机上翻代码 | V3 |
-| ⭐ | Git 事件触发 | push 后自动检查 | V3 |
+| ⭐ | Git 事件触发 (webhook) | push 后自动检查 | V3 |
 | ⭐ | 会话间共享上下文 | 多会话协同 | V3 |
 
 ---
 
-## 8. iOS 支持规划
-
-### 8.1 为什么不 V1 做 iOS
-
-- iOS 分发需要签名/TestFlight/App Store，不能直接装 IPA
-- iOS UI 需要用 SwiftUI 原生（WebView 体验差），Go 核心可复用但 UI 层要重写
-- 语音输入需用 `SFSpeechRecognizer`（Swift 原生），不能像 Android 用 Web Speech API
-
-**策略：V1 Android 先跑通，V2 扩展到 iOS。**
-
-### 8.2 iOS 架构
-
-```
-┌──────────────────────────────────────┐
-│  iOS App (Swift/SwiftUI)             │
-│                                      │
-│  ┌────────────────────────────────┐  │
-│  │ Go 核心 (gomobile → .framework) │  │  ← ★ 和 Android 共享同一份 Go 代码
-│  │  tsnet + WebSocket + 协议处理    │  │     pkg/protocol、pkg/session 完全复用
-│  └────────────────────────────────┘  │
-│                                      │
-│  ┌────────────────────────────────┐  │
-│  │ Chat UI (SwiftUI 原生)          │  │  ← iOS 原生 UI
-│  │  - 会话列表 + 聊天界面           │  │
-│  │  - 权限确认卡片                  │  │
-│  └────────────────────────────────┘  │
-│                                      │
-│  ┌────────────────────────────────┐  │
-│  │ 语音: SFSpeechRecognizer        │  │  ← iOS 原生语音识别
-│  └────────────────────────────────┘  │
-└──────────────────────────────────────┘
-```
-
-### 8.3 与 Android 端的差异
-
-| | Android | iOS |
-|---|---|---|
-| Go 核心 | ✅ gomobile .aar | ✅ gomobile .framework（同一份代码） |
-| UI 层 | WebView (HTML) | SwiftUI（不可复用） |
-| 语音输入 | Web Speech API | SFSpeechRecognizer |
-| 分发 | APK 直装 | TestFlight / App Store |
-
-### 8.4 实现优先级
-
-| 阶段 | 平台 | 内容 |
-|------|------|------|
-| V1 | Android | 全功能上线 |
-| V2 | iOS | Go 核心复用 + SwiftUI UI 重写 + 语音适配 |
-| V3 | 未来 | 如需统一体验 → 自建中继，三端共连 |
-
----
-
-## 9. WebView vs 原生 UI 选择
-
-选择 **WebView** 渲染聊天界面。
-
-| | WebView | 原生 (Compose) |
-|---|---|---|
-| 开发速度 | 极快，AI 直接生成 HTML | 慢，手写 Kotlin |
-| 聊天体验 | 完全一样 | 完全一样 |
-| 语音输入 | Web Speech API (原生) | SpeechRecognizer |
-| 代码体积 | HTML + CSS (~100KB) | Compose 依赖 (~5MB) |
-
-聊天界面是 HTML/CSS 最强的领域。UI 由 AI 生成和维护，开发精力全部放在 Go 核心逻辑上。
-
----
-
-## 10. 开源计划
+## 9. 开源计划
 
 - **仓库**：`github.com/yang-bin-free/claude-phone`
 - **许可证**：MIT
 - **发布**：GitHub Releases 提供预编译 APK + Mac 二进制
-- **全部依赖兼容 MIT**（BSD-3/BSD-2/Apache 2.0），无 GPL 传染问题
 
-### 开源合规清单
+### 9.1 许可证兼容性分析
+
+我们项目 MIT 许可证，依赖的全部是宽松协议，无 GPL 传染问题：
+
+| 依赖 | 许可证 | 与 MIT 兼容？ | 说明 |
+|------|--------|-------------|------|
+| `tailscale.com/tsnet` | BSD-3 | ✅ | Mac 端使用，原始版权头保留即可 |
+| `tailscale.com/ipnlocal` 等 | BSD-3 | ✅ | 手机端 libtailscale fork，**必须保留所有原始版权头** |
+| `github.com/gorilla/websocket` | BSD-2 | ✅ | WebSocket 库 |
+| `github.com/tailscale/wireguard-go` | MIT | ✅ | tun fd 集成用 |
+| Android VpnService | Apache 2.0 | ✅ | 系统 API，不涉及源码分发 |
+| iOS NetworkExtension | 系统框架 API | ✅ | 无分发限制，不涉及源码分发 |
+| Web Speech API | 浏览器内置 | ✅ | — |
+| SFSpeechRecognizer | 系统框架 API | ✅ | 无分发限制，不涉及源码分发 |
+
+### 9.2 Fork Tailscale 源码的合规要求 ⚠️
+
+这是合规风险最高的点。我们从 `tailscale/tailscale-android` fork 了 `libtailscale/` 目录（`backend.go`、`net.go`、`vpnfacade.go`、`interfaces.go` 等文件），这些文件原始许可证为 **BSD-3**（Tailscale Inc & AUTHORS）。
+
+**必须做到**：
 
 | 事项 | 说明 |
 |------|------|
-| 项目根放 `LICENSE` 文件 | MIT License, Copyright (c) 2026 yang-bin-free |
-| README 末尾注明依赖 | 列出 Tailscale tsnet (BSD-3)、Gorilla WebSocket (BSD-2)、Android VpnService (Apache 2.0) 及其许可证 |
-| 复制他人源码时保留版权头 | 如果直接复制了 Tailscale 源码文件，文件头的原始 Copyright 声明不可删除 |
-| go.mod 本身就是依赖声明 | BSD/Apache 不要求贴出许可证原文，但建议加 `THIRD_PARTY_LICENSES.md` |
-| 不需要征求原作者许可 | BSD/Apache/MIT 都是宽松协议，不要求事先授权 |
-| 可以商用 | 三个依赖均允许商用，无附加条件 |
+| **保留原始版权头** | 每个 fork 的 `.go` 文件**顶部 3 行版权注释不可删除或修改**。例如：`// Copyright (c) Tailscale Inc & contributors` + `// SPDX-License-Identifier: BSD-3-Clause` |
+| **保留 SPDX 标识** | 不删除 `SPDX-License-Identifier` 行，自动化工具依赖它做许可证扫描 |
+| **新增代码放新文件** | 我们自己新增的代码**放在独立的新文件里**，加 `// SPDX-License-Identifier: MIT`。**不要在 fork 的文件里混写两种许可证**——一个文件两种许可证会让自动化扫描工具和人类读者都困惑 |
+| **NOTICE 文件** | BSD-3 要求在二进制分发时提供版权声明。项目根放 `NOTICE` 文件，列出所有 BSD 依赖的版权声明 |
+| **go.mod 记录依赖** | `go.mod` 本身就是依赖声明，BSD/Apache 不要求贴出许可证原文 |
+
+**严禁**：
+
+- ❌ 把 Tailscale 的 BSD-3 文件改标为 MIT
+- ❌ 删除或替换原始 `Copyright` 行
+- ❌ 把 fork 代码和自写代码混在同一个文件标注不同许可证
+
+### 9.3 二进制分发的合规
+
+GitHub Release 发布 APK + Mac 二进制时：
+
+| 事项 | 说明 |
+|------|------|
+| `LICENSE` 文件 | 项目根，MIT License 全文 |
+| `NOTICE` 文件 | 项目根，列出 Tailscale BSD-3 版权声明（BSD 要求二进制分发时携带） |
+| `THIRD_PARTY_LICENSES.md` | 列出所有依赖的许可证名称 + 版权声明，方便用户和自动化工具审查 |
+| Release notes | 附上"本产品包含 Tailscale (BSD-3) 和 Gorilla WebSocket (BSD-2) 的代码" |
+
+### 9.4 Tailscale Auth Key 使用合规
+
+Tailscale 的 Auth Key 是通过 Tailscale 协调服务器完成设备认证的。开源项目中：
+
+- **可以包含**：使用 tsnet / libtailscale 的 Go 代码（这是公开 API）
+- **不可包含**：具体的 Auth Key 值（`tskey-auth-xxx`）放在源码或 plist 中——这属于用户个人凭据
+- **README 说明**：引导用户自建 Tailscale 网络 + 自己生成 Auth Key，不要共享协调服务器的访问权限
+
+### 9.5 开源合规检查清单
+
+| 检查项 | 阶段 | 负责人 |
+|--------|------|--------|
+| 项目根 `LICENSE` (MIT) | P1 | — |
+| 项目根 `NOTICE` (BSD-3 版权声明) | P1 | — |
+| `THIRD_PARTY_LICENSES.md` | P1 | — |
+| fork 文件原始版权头保留（CI 检查） | P3 | CI 脚本 |
+| go.mod 依赖无 GPL | P1 | `go mod` 自动管理 |
+| 源码中无硬编码 Auth Key | P1 | CI 脚本 |
+| Release 附带合规声明 | P5 | — |
+
+**CI 防回归**：建议在 CI 中加一步检查，确保 fork 的 Tailscale 文件头部包含 `SPDX-License-Identifier: BSD-3-Clause`，防止未来维护中误删版权头。
 
 ---
 
-## 11. 实现阶段
+## 10. 方案演化
 
-| 阶段 | 内容 | 预计 |
-|------|------|------|
-| Phase 1 | Mac 助手核心: `pkg/protocol` + `pkg/session` + tsnet + claude 进程管理 + websocat 测试 | 2-3 天 |
-| Phase 2 | Mac 助手完整: 权限管理 + 健康监控 + 通知推送 + Git 工具 | 1-2 天 |
-| Phase 3 | Android Go 核心 (gomobile) + Kotlin 壳 + WebView Chat UI | 2-3 天 |
-| Phase 4 | Android 完整: 语音输入 + 会话管理 + 权限确认卡片 + 健康状态展示 | 1-2 天 |
-| Phase 5 | 打磨: 模板按钮 + 重连/中断 + 错误处理 + 状态指示 | 1-2 天 |
-| Phase 6 | 开源: README + CONTRIBUTING + 构建文档 + GitHub Release | 1 天 |
-| Phase 7 | iOS (V2): Go 核心复用 + SwiftUI Chat UI + SFSpeechRecognizer | 3-4 天 |
+SSH+Termius → ttyd → 自建云中继 → **全 Go + Tailscale**
 
----
-
-## 12. 讨论记录
-
-- 方案演化: SSH+Termius → ttyd → 自建云中继 → 全 Go + tsnet
-- 网络层: Tailscale tsnet 嵌入，零外部 App 依赖
-- 会话管理: 惰性唤醒、30 分钟断线超时、`--resume` 恢复
-- 工作目录: 创建会话时从预设列表选择，支持单项目/父目录/多目录
-- UI: WebView + AI 生成 HTML，Web Speech API 语音输入
-- 配对: Auth Key 文本输入，不支持二维码扫描（异步场景不适用）
+关键决策：
+- **网络层**：Tailscale 嵌入，零外部 App 依赖；Mac 用 tsnet，手机用 Tailscale 引擎 + tun fd
+- **会话模型**：多设备并发，owner + subscribers，输出扇出广播
+- **UI**：Android 用 WebView（AI 生成维护），iOS 用 SwiftUI 原生
+- **配对**：Auth Key 文本输入（不支持扫码，异步场景更灵活）
+- **认证**：两层（Tailscale 网络层 + 应用层 device token）
