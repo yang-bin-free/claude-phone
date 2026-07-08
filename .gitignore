@@ -1,0 +1,10 @@
+# Build outputs
+build/
+android/app/build/
+android/.gradle/
+
+# IDE / Claude
+.claude/
+
+# OS
+.DS_Store
