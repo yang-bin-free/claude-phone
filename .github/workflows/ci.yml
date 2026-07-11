@@ -59,3 +59,30 @@ jobs:
           ./scripts/test-android-aar.sh
           cd android
           ./build-android.sh clean :app:assembleDebug --no-daemon
+
+  ios:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: go.sum
+      - name: Select Xcode and show SDK
+        run: |
+          sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
+          xcodebuild -version
+          xcrun --sdk iphoneos --show-sdk-version
+      - name: Install gomobile
+        run: |
+          go install golang.org/x/mobile/cmd/gomobile@v0.0.0-20260611195102-4dd8f1dbf5d2
+          gomobile init
+      - name: Build iOS XCFramework
+        run: ./scripts/build-ios-framework.sh
+      - name: Build iOS app and packet tunnel without signing
+        run: |
+          xcodebuild build \
+            -project ios/ClaudePhone.xcodeproj \
+            -scheme ClaudePhone \
+            -destination 'generic/platform=iOS Simulator' \
+            CODE_SIGNING_ALLOWED=NO
