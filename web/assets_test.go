@@ -30,6 +30,7 @@ func TestSharedChatAssetsSupportMobileRemoteConnection(t *testing.T) {
 		"action: \"load_history\"", "case \"history\"",
 		"/admin/devices/", "revokeDevice",
 		"/admin/projects", "deleteProject",
+		"/admin/permission-rules", "deletePermissionRule",
 		"AndroidBridge.startVoice", "setPrompt",
 	} {
 		if !strings.Contains(scripts, marker) {

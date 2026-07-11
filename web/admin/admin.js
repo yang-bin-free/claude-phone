@@ -6,7 +6,7 @@
     const token = window.claudePhone.adminToken;
     const response = await fetch("/admin/status", { headers: { Authorization: `Bearer ${token}` } });
     if (!response.ok) throw new Error(`admin status ${response.status}`);
-    const { agent, devices, projects, diagnostics } = await response.json();
+    const { agent, devices, projects, diagnostics, permissionRules } = await response.json();
     document.querySelector("#metrics").innerHTML = [
       ["在线设备", agent.connectedDevices?.length || 0], ["活跃会话", agent.sessions?.length || 0],
       ["Agent", agent.agentVersion], ["Claude", agent.claudeVersion],
@@ -44,6 +44,21 @@
       projectList.append(row);
     });
     if (!projects?.length) projectList.textContent = "尚未配置工作目录";
+    const permissionList = document.querySelector("#admin-permissions");
+    permissionList.replaceChildren();
+    (permissionRules || []).forEach(rule => {
+      const row = document.createElement("div");
+      row.className = "permission-row";
+      const label = document.createElement("span");
+      label.textContent = rule.pattern ? `${rule.tool}(${rule.pattern})` : rule.tool;
+      const remove = document.createElement("button");
+      remove.className = "quiet danger";
+      remove.textContent = "删除";
+      remove.addEventListener("click", () => deletePermissionRule(rule.ruleId));
+      row.append(label, remove);
+      permissionList.append(row);
+    });
+    if (!permissionRules?.length) permissionList.textContent = "尚未记忆权限规则";
   }
   async function revokeDevice(deviceId) {
     const response = await fetch(`/admin/devices/${encodeURIComponent(deviceId)}`, {
@@ -58,6 +73,13 @@
       method: "DELETE", headers: { Authorization: `Bearer ${window.claudePhone.adminToken}` }
     });
     if (!response.ok) throw new Error(`delete project ${response.status}`);
+    await refresh();
+  }
+  async function deletePermissionRule(ruleId) {
+    const response = await fetch(`/admin/permission-rules/${encodeURIComponent(ruleId)}`, {
+      method: "DELETE", headers: { Authorization: `Bearer ${window.claudePhone.adminToken}` }
+    });
+    if (!response.ok) throw new Error(`delete permission rule ${response.status}`);
     await refresh();
   }
   document.querySelector("#project-form").addEventListener("submit", async event => {
@@ -83,6 +105,17 @@
     const output = document.querySelector("#new-device-token");
     output.hidden = false;
     output.textContent = `请复制到手机（只显示一次）：\n${credential.deviceToken}`;
+    event.target.reset();
+    await refresh();
+  });
+  document.querySelector("#permission-form").addEventListener("submit", async event => {
+    event.preventDefault();
+    const response = await fetch("/admin/permission-rules", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${window.claudePhone.adminToken}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ tool: document.querySelector("#permission-tool").value.trim(), pattern: document.querySelector("#permission-pattern").value.trim() })
+    });
+    if (!response.ok) throw new Error(await response.text());
     event.target.reset();
     await refresh();
   });

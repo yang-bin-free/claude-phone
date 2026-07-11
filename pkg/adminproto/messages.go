@@ -2,10 +2,17 @@
 package adminproto
 
 type Snapshot struct {
-	Agent       AgentStatus      `json:"agent"`
-	Devices     []DeviceSnapshot `json:"devices"`
-	Projects    []Project        `json:"projects"`
-	Diagnostics Diagnostics      `json:"diagnostics"`
+	Agent           AgentStatus      `json:"agent"`
+	Devices         []DeviceSnapshot `json:"devices"`
+	Projects        []Project        `json:"projects"`
+	Diagnostics     Diagnostics      `json:"diagnostics"`
+	PermissionRules []PermissionRule `json:"permissionRules"`
+}
+
+type PermissionRule struct {
+	RuleID  string `json:"ruleId"`
+	Tool    string `json:"tool"`
+	Pattern string `json:"pattern,omitempty"`
 }
 
 type Diagnostics struct {

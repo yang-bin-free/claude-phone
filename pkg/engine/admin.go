@@ -26,8 +26,28 @@ func (e *Engine) AdminHandler(token string) http.Handler {
 			return
 		}
 		writeAdminJSON(w, http.StatusOK, adminproto.Snapshot{
-			Agent: adminStatus(e.Status()), Devices: e.adminDevices(), Projects: projects, Diagnostics: e.diagnostics(),
+			Agent: adminStatus(e.Status()), Devices: e.adminDevices(), Projects: projects, Diagnostics: e.diagnostics(), PermissionRules: e.permissions.List(),
 		})
+	})
+	mux.HandleFunc("POST /admin/permission-rules", func(w http.ResponseWriter, r *http.Request) {
+		var rule adminproto.PermissionRule
+		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxAdminBodyBytes)).Decode(&rule); err != nil {
+			http.Error(w, "invalid request", http.StatusBadRequest)
+			return
+		}
+		created, err := e.permissions.Add(rule.Tool, rule.Pattern)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		writeAdminJSON(w, http.StatusCreated, created)
+	})
+	mux.HandleFunc("DELETE /admin/permission-rules/{ruleID}", func(w http.ResponseWriter, r *http.Request) {
+		if !e.permissions.Delete(r.PathValue("ruleID")) {
+			http.Error(w, "permission rule not found", http.StatusNotFound)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
 	})
 	mux.HandleFunc("POST /admin/projects", func(w http.ResponseWriter, r *http.Request) {
 		var project adminproto.Project

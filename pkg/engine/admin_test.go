@@ -105,6 +105,29 @@ func TestAdminHandlerCreatesPersistentDeviceCredential(t *testing.T) {
 	}
 }
 
+func TestAdminHandlerManagesPermissionRules(t *testing.T) {
+	e := New(Config{DataDir: t.TempDir()})
+	defer e.Close()
+	h := e.AdminHandler("secret")
+	createW := httptest.NewRecorder()
+	h.ServeHTTP(createW, adminRequest(http.MethodPost, "/admin/permission-rules", `{"tool":"Bash","pattern":"git status:*"}`, "secret"))
+	if createW.Code != http.StatusCreated {
+		t.Fatalf("create status=%d body=%s", createW.Code, createW.Body.String())
+	}
+	var rule adminproto.PermissionRule
+	if err := json.NewDecoder(createW.Body).Decode(&rule); err != nil {
+		t.Fatal(err)
+	}
+	if got := e.permissions.AllowedTools(); len(got) != 1 || got[0] != "Bash(git status:*)" {
+		t.Fatalf("allowed tools = %v", got)
+	}
+	deleteW := httptest.NewRecorder()
+	h.ServeHTTP(deleteW, adminRequest(http.MethodDelete, "/admin/permission-rules/"+rule.RuleID, "", "secret"))
+	if deleteW.Code != http.StatusNoContent {
+		t.Fatalf("delete status=%d body=%s", deleteW.Code, deleteW.Body.String())
+	}
+}
+
 func mustJSONString(t *testing.T, value string) string {
 	t.Helper()
 	b, err := json.Marshal(value)

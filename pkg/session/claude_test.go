@@ -1,10 +1,18 @@
 package session
 
 import (
+	"slices"
 	"sync"
 	"testing"
 	"time"
 )
+
+func TestClaudeProcIncludesAllowedTools(t *testing.T) {
+	args := NewClaudeProc(ClaudeConfig{SessionID: "s", Permission: "default", AllowedTools: []string{"Read", "Bash(git status:*)"}}).buildArgs()
+	if !slices.Contains(args, "--allowedTools") || !slices.Contains(args, "Bash(git status:*)") {
+		t.Fatalf("args missing allowed tools: %v", args)
+	}
+}
 
 func TestClaudeProc_StreamsTokens(t *testing.T) {
 	proc := NewClaudeProc(ClaudeConfig{

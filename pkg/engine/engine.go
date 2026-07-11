@@ -26,33 +26,35 @@ type Engine struct {
 	factory ClaudeFactory
 	server  *http.Server
 
-	mu        sync.RWMutex
-	resumeMu  sync.Mutex
-	clients   map[string]*client
-	procs     map[string]claudeProc
-	projects  *projectStore
-	devices   *deviceStore
-	history   *historyStore
-	startedAt time.Time
-	configMu  sync.RWMutex
-	runtime   runtimeConfig
-	stopWatch chan struct{}
-	closeOnce sync.Once
+	mu          sync.RWMutex
+	resumeMu    sync.Mutex
+	clients     map[string]*client
+	procs       map[string]claudeProc
+	projects    *projectStore
+	devices     *deviceStore
+	history     *historyStore
+	permissions *permissionStore
+	startedAt   time.Time
+	configMu    sync.RWMutex
+	runtime     runtimeConfig
+	stopWatch   chan struct{}
+	closeOnce   sync.Once
 }
 
 func New(cfg Config) *Engine {
 	cfg = cfg.withDefaults()
 	e := &Engine{
-		cfg:       cfg,
-		manager:   session.NewManager(session.ManagerConfig{MaxConcurrent: cfg.MaxConcurrentSession}),
-		clients:   map[string]*client{},
-		procs:     map[string]claudeProc{},
-		projects:  newProjectStore(cfg.DataDir),
-		devices:   newDeviceStore(cfg.DataDir),
-		history:   newHistoryStore(cfg.DataDir),
-		startedAt: time.Now(),
-		runtime:   runtimeConfig{DefaultWorkingDir: cfg.DefaultWorkingDir, DefaultPermission: cfg.DefaultPermission, MaxConcurrentSessions: cfg.MaxConcurrentSession},
-		stopWatch: make(chan struct{}),
+		cfg:         cfg,
+		manager:     session.NewManager(session.ManagerConfig{MaxConcurrent: cfg.MaxConcurrentSession}),
+		clients:     map[string]*client{},
+		procs:       map[string]claudeProc{},
+		projects:    newProjectStore(cfg.DataDir),
+		devices:     newDeviceStore(cfg.DataDir),
+		history:     newHistoryStore(cfg.DataDir),
+		permissions: newPermissionStore(cfg.DataDir),
+		startedAt:   time.Now(),
+		runtime:     runtimeConfig{DefaultWorkingDir: cfg.DefaultWorkingDir, DefaultPermission: cfg.DefaultPermission, MaxConcurrentSessions: cfg.MaxConcurrentSession},
+		stopWatch:   make(chan struct{}),
 	}
 	e.factory = func(c session.ClaudeConfig) claudeProc { return session.NewClaudeProc(c) }
 	if persisted, err := e.history.Restore(); err == nil {

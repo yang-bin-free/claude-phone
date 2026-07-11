@@ -11,12 +11,13 @@ import (
 
 // ClaudeConfig 是启动 claude 子进程所需的参数。
 type ClaudeConfig struct {
-	Bin        string   // claude 可执行文件路径（默认 "claude"）
-	Cwd        string   // 工作目录
-	SessionID  string   // 固定 session-id，支持 --resume
-	Permission string   // bypassPermissions | acceptEdits | default
-	AddDirs    []string // 额外 --add-dir
-	Resume     bool
+	Bin          string   // claude 可执行文件路径（默认 "claude"）
+	Cwd          string   // 工作目录
+	SessionID    string   // 固定 session-id，支持 --resume
+	Permission   string   // bypassPermissions | acceptEdits | default
+	AddDirs      []string // 额外 --add-dir
+	Resume       bool
+	AllowedTools []string
 }
 
 // OutputFunc 接收一行 claude stdout 的原始 JSON。
@@ -62,6 +63,10 @@ func (p *ClaudeProc) buildArgs() []string {
 		"--permission-mode", p.cfg.Permission,
 		"--replay-user-messages",
 	)
+	if len(p.cfg.AllowedTools) > 0 {
+		args = append(args, "--allowedTools")
+		args = append(args, p.cfg.AllowedTools...)
+	}
 	for _, d := range p.cfg.AddDirs {
 		args = append(args, "--add-dir", d)
 	}

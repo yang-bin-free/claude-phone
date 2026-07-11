@@ -284,11 +284,12 @@ func (e *Engine) createSession(cl *client, msg protocol.ControlMsg) (string, err
 	}
 
 	proc := e.factory(session.ClaudeConfig{
-		Bin:        e.cfg.ClaudeBin,
-		Cwd:        cwd,
-		SessionID:  s.ID,
-		Permission: permission,
-		AddDirs:    []string{cwd},
+		Bin:          e.cfg.ClaudeBin,
+		Cwd:          cwd,
+		SessionID:    s.ID,
+		Permission:   permission,
+		AddDirs:      []string{cwd},
+		AllowedTools: e.permissions.AllowedTools(),
 	})
 	proc.OnOutput(func(payload []byte) {
 		_ = e.history.Append(s.ID, payload)
@@ -326,6 +327,7 @@ func (e *Engine) resumeSession(s *session.Session) error {
 	proc := e.factory(session.ClaudeConfig{
 		Bin: e.cfg.ClaudeBin, Cwd: s.Cwd, SessionID: s.ID, Permission: s.Permission,
 		AddDirs: []string{s.Cwd}, Resume: true,
+		AllowedTools: e.permissions.AllowedTools(),
 	})
 	proc.OnOutput(func(payload []byte) {
 		_ = e.history.Append(s.ID, payload)
