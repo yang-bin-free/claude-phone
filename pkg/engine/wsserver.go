@@ -197,8 +197,25 @@ func (e *Engine) handleControl(cl *client, currentSession string, raw []byte) (s
 			items = append(items, protocol.ProjectInfo{Name: project.Name, Path: project.Path, Permission: project.Permission})
 		}
 		return currentSession, cl.writeJSON(protocol.ProjectListMsg{Type: protocol.TypeProjectList, Projects: items})
+	case protocol.ActionPing, protocol.ActionWaitLonger:
+		return currentSession, cl.writeJSON(protocol.PongMsg{Type: protocol.TypePong})
+	case protocol.ActionCancel, protocol.ActionForceKill:
+		s, ok := e.manager.Get(msg.SessionID)
+		if !ok && currentSession != "" {
+			s, ok = e.manager.Get(currentSession)
+		}
+		if !ok {
+			return currentSession, session.ErrSessionNotFound
+		}
+		if s.Owner != cl.deviceID {
+			return currentSession, session.ErrSessionNotOwner
+		}
+		if err := e.stopSession(s); err != nil {
+			return currentSession, err
+		}
+		return "", nil
 	default:
-		return currentSession, nil
+		return currentSession, errors.New("unsupported control action")
 	}
 }
 

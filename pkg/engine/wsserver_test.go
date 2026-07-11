@@ -64,6 +64,8 @@ func TestWebSocket_CreateSessionAndStream(t *testing.T) {
 
 	writeJSON(t, conn, protocol.AuthMsg{Type: protocol.TypeAuth, DeviceToken: "dt_abc", DeviceName: "Pixel"})
 	assertType(t, conn, protocol.TypeHello)
+	writeJSON(t, conn, protocol.ControlMsg{Type: protocol.TypeControl, Action: protocol.ActionPing})
+	assertType(t, conn, protocol.TypePong)
 
 	writeJSON(t, conn, protocol.ControlMsg{
 		Type:           protocol.TypeControl,
@@ -76,6 +78,12 @@ func TestWebSocket_CreateSessionAndStream(t *testing.T) {
 
 	writeJSON(t, conn, protocol.TextMsg{Type: protocol.TypeText, Content: "检查并发"})
 	want := []string{protocol.TypeThinking, protocol.TypeToken, protocol.TypeToken, protocol.TypeDone}
+	for _, typ := range want {
+		assertType(t, conn, typ)
+	}
+
+	writeJSON(t, conn, protocol.TextMsg{Type: protocol.TypeText, Content: "第二轮"})
+	_ = conn.SetReadDeadline(time.Now().Add(time.Second))
 	for _, typ := range want {
 		assertType(t, conn, typ)
 	}

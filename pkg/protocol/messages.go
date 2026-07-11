@@ -154,6 +154,10 @@ type TokenMsg struct {
 	Content string `json:"content"`
 }
 
+type PongMsg struct {
+	Type string `json:"type"`
+}
+
 type ToolUseMsg struct {
 	Type  string `json:"type"`
 	Tool  string `json:"tool"`
