@@ -1,8 +1,6 @@
 package main
 
 import (
-	"crypto/rand"
-	"encoding/hex"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -124,23 +122,16 @@ func runStatus(args []string) {
 
 func runKey(args []string) {
 	fs := flag.NewFlagSet("key", flag.ExitOnError)
-	ttl := fs.Duration("ttl", time.Hour, "key lifetime")
+	dataDir := fs.String("data-dir", "", "Claude Phone configuration directory")
+	name := fs.String("name", "Android", "device display name")
 	_ = fs.Parse(args)
 
-	key, err := generatePairingKey()
+	credential, err := engine.GenerateDeviceCredential(*dataDir, *name)
 	if err != nil {
 		log.Fatal(err)
 	}
-	fmt.Printf("pairing-key: %s\n", key)
-	fmt.Printf("expires-at: %s\n", time.Now().Add(*ttl).UTC().Format(time.RFC3339))
-}
-
-func generatePairingKey() (string, error) {
-	var b [16]byte
-	if _, err := rand.Read(b[:]); err != nil {
-		return "", err
-	}
-	return "pk_" + hex.EncodeToString(b[:]), nil
+	fmt.Printf("device-name: %s\n", credential.Device.Name)
+	fmt.Printf("device-token: %s\n", credential.DeviceToken)
 }
 
 func statusURL(addr string) string {

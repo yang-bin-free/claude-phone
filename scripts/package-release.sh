@@ -18,5 +18,6 @@ else
 fi
 
 cp LICENSE NOTICE THIRD_PARTY_LICENSES.md "${release_dir}/"
+rm -f "${release_dir}/SHA256SUMS"
 shasum -a 256 "${release_dir}"/* >"${release_dir}/SHA256SUMS"
 echo "Release artifacts: ${release_dir}"

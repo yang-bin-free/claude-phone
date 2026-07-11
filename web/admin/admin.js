@@ -71,6 +71,21 @@
     event.target.reset();
     await refresh();
   });
+  document.querySelector("#device-form").addEventListener("submit", async event => {
+    event.preventDefault();
+    const response = await fetch("/admin/devices", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${window.claudePhone.adminToken}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ name: document.querySelector("#device-name").value.trim() || "Android" })
+    });
+    if (!response.ok) throw new Error(await response.text());
+    const credential = await response.json();
+    const output = document.querySelector("#new-device-token");
+    output.hidden = false;
+    output.textContent = `请复制到手机（只显示一次）：\n${credential.deviceToken}`;
+    event.target.reset();
+    await refresh();
+  });
   document.querySelector("#show-admin").addEventListener("click", async () => {
     chat.hidden = true; admin.hidden = false; title.textContent = "管理与诊断";
     try { await refresh(); } catch (error) { document.querySelector("#admin-sessions").textContent = error.message; }

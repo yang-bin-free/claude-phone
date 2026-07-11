@@ -82,6 +82,29 @@ func TestAdminHandlerPersistsAndDeletesProjects(t *testing.T) {
 	}
 }
 
+func TestAdminHandlerCreatesPersistentDeviceCredential(t *testing.T) {
+	dataDir := t.TempDir()
+	e := New(Config{DataDir: dataDir})
+	h := e.AdminHandler("secret")
+	createW := httptest.NewRecorder()
+	h.ServeHTTP(createW, adminRequest(http.MethodPost, "/admin/devices", `{"name":"Pixel"}`, "secret"))
+	if createW.Code != http.StatusCreated {
+		t.Fatalf("status=%d body=%s", createW.Code, createW.Body.String())
+	}
+	var credential adminproto.DeviceCredential
+	if err := json.NewDecoder(createW.Body).Decode(&credential); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.HasPrefix(credential.DeviceToken, "dt_") || credential.Device.Name != "Pixel" {
+		t.Fatalf("credential=%+v", credential)
+	}
+
+	restarted := New(Config{DataDir: dataDir})
+	if !restarted.deviceAuthorized(credential.DeviceToken) {
+		t.Fatal("persisted credential was not authorized after restart")
+	}
+}
+
 func mustJSONString(t *testing.T, value string) string {
 	t.Helper()
 	b, err := json.Marshal(value)

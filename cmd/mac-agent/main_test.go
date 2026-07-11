@@ -4,18 +4,20 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/yang-bin-free/claude-phone/pkg/engine"
 )
 
-func TestGeneratePairingKey(t *testing.T) {
-	key, err := generatePairingKey()
+func TestGenerateDeviceCredential(t *testing.T) {
+	credential, err := engine.GenerateDeviceCredential(t.TempDir(), "Pixel")
 	if err != nil {
 		t.Fatalf("generate key: %v", err)
 	}
-	if !strings.HasPrefix(key, "pk_") {
-		t.Fatalf("key prefix mismatch: %q", key)
+	if !strings.HasPrefix(credential.DeviceToken, "dt_") {
+		t.Fatalf("key prefix mismatch: %q", credential.DeviceToken)
 	}
-	if len(key) <= len("pk_") {
-		t.Fatalf("key too short: %q", key)
+	if credential.Device.Name != "Pixel" {
+		t.Fatalf("name=%q", credential.Device.Name)
 	}
 }
 

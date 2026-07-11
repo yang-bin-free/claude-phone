@@ -104,12 +104,8 @@ func (e *Engine) authenticate(conn *websocket.Conn) (*client, error) {
 	if msg.DeviceToken == "" {
 		return nil, errors.New("missing device token")
 	}
-	e.mu.RLock()
-	defer e.mu.RUnlock()
-	if len(e.cfg.DeviceTokens) > 0 {
-		if _, ok := e.cfg.DeviceTokens[msg.DeviceToken]; !ok {
-			return nil, errors.New("device token not authorized")
-		}
+	if !e.deviceAuthorized(msg.DeviceToken) {
+		return nil, errors.New("device token not authorized")
 	}
 	return &client{deviceID: msg.DeviceToken, conn: conn, mu: make(chan struct{}, 1)}, nil
 }

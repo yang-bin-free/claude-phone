@@ -31,7 +31,10 @@
       </section>
       <section id="admin-view" class="admin-view" hidden>
         <div class="metric-grid" id="metrics"></div>
-        <h2>设备</h2><div id="admin-devices"></div>
+        <h2>设备</h2>
+        <form id="device-form"><input id="device-name" placeholder="设备名称，例如 Pixel"><button class="primary">生成 Device Token</button></form>
+        <pre id="new-device-token" hidden></pre>
+        <div id="admin-devices"></div>
         <h2>工作目录</h2>
         <form id="project-form"><input id="project-name" placeholder="名称"><input id="project-path" placeholder="绝对路径" required><button class="primary">添加</button></form>
         <div id="admin-projects"></div>

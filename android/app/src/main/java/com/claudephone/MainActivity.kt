@@ -19,7 +19,6 @@ import android.widget.Button
 import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.TextView
-import java.util.UUID
 import android.speech.RecognizerIntent
 import org.json.JSONObject
 
@@ -27,6 +26,7 @@ class MainActivity : Activity() {
 
     private lateinit var macAddress: EditText
     private lateinit var authKey: EditText
+    private lateinit var deviceToken: EditText
     private lateinit var controlUrl: EditText
     private var currentWebView: WebView? = null
 
@@ -59,9 +59,12 @@ class MainActivity : Activity() {
         macAddress = field("Mac 地址", prefs.getString(KEY_MAC_ADDRESS, "claude-mac:9876").orEmpty())
         authKey = field("Tailscale Auth Key（首次连接需要）", "")
         authKey.inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
+        deviceToken = field("Device Token（Mac 端生成）", prefs.getString(KEY_DEVICE_TOKEN, "").orEmpty())
+        deviceToken.inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
         controlUrl = field("Control URL（可选，Headscale）", prefs.getString(KEY_CONTROL_URL, "").orEmpty())
         container.addView(macAddress)
         container.addView(authKey)
+        container.addView(deviceToken)
         container.addView(controlUrl)
         container.addView(Button(this).apply {
             text = "连接并打开聊天"
@@ -71,9 +74,14 @@ class MainActivity : Activity() {
                     macAddress.error = "请输入 Mac 地址"
                     return@setOnClickListener
                 }
+                if (deviceToken.text.toString().trim().isEmpty()) {
+                    deviceToken.error = "请在 Mac 端运行 claude-phone-agent key 生成"
+                    return@setOnClickListener
+                }
                 prefs.edit()
                     .putString(KEY_MAC_ADDRESS, address)
                     .putString(KEY_CONTROL_URL, controlUrl.text.toString().trim())
+                    .putString(KEY_DEVICE_TOKEN, deviceToken.text.toString().trim())
                     .apply()
                 requestVpnPermission()
             }
@@ -121,13 +129,11 @@ class MainActivity : Activity() {
         }
         startForegroundService(serviceIntent)
 
-        val deviceToken = prefs.getString(KEY_DEVICE_TOKEN, null) ?: UUID.randomUUID().toString().also {
-            prefs.edit().putString(KEY_DEVICE_TOKEN, it).apply()
-        }
+        val authorizedDeviceToken = prefs.getString(KEY_DEVICE_TOKEN, "").orEmpty()
         val page = Uri.parse("file:///android_asset/chat/index.html").buildUpon()
             .appendQueryParameter("platform", "mobile")
             .appendQueryParameter("ws", webSocketURL(macAddress.text.toString()))
-            .appendQueryParameter("deviceToken", "android-$deviceToken")
+            .appendQueryParameter("deviceToken", authorizedDeviceToken)
             .appendQueryParameter("deviceName", android.os.Build.MODEL ?: "Android")
             .build()
 

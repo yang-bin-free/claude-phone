@@ -14,7 +14,7 @@ import (
 )
 
 func TestWebSocket_ListProjectsUsesAdminProjectStore(t *testing.T) {
-	e := New(Config{DataDir: t.TempDir()})
+	e := New(Config{DataDir: t.TempDir(), DeviceTokens: map[string]string{"device": "Android"}})
 	projectDir := t.TempDir()
 	if _, err := e.projects.Add(adminproto.Project{Name: "Demo", Path: projectDir, Permission: "default"}); err != nil {
 		t.Fatal(err)

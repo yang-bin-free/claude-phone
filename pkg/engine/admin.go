@@ -61,6 +61,22 @@ func (e *Engine) AdminHandler(token string) http.Handler {
 		}
 		w.WriteHeader(http.StatusNoContent)
 	})
+	mux.HandleFunc("POST /admin/devices", func(w http.ResponseWriter, r *http.Request) {
+		var request adminproto.CreateDeviceRequest
+		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxAdminBodyBytes)).Decode(&request); err != nil {
+			http.Error(w, "invalid request", http.StatusBadRequest)
+			return
+		}
+		credential, err := e.devices.Add(request.Name)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		e.mu.Lock()
+		e.cfg.DeviceTokens[credential.DeviceToken] = credential.Device.Name
+		e.mu.Unlock()
+		writeAdminJSON(w, http.StatusCreated, credential)
+	})
 	mux.HandleFunc("POST /admin/sessions/stop", func(w http.ResponseWriter, r *http.Request) {
 		var request adminproto.StopSessionRequest
 		decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxAdminBodyBytes))
@@ -102,10 +118,18 @@ func (e *Engine) diagnostics() adminproto.Diagnostics {
 }
 
 func (e *Engine) adminDevices() []adminproto.DeviceSnapshot {
+	records := e.devices.List()
 	e.mu.RLock()
 	defer e.mu.RUnlock()
-	devices := make([]adminproto.DeviceSnapshot, 0, len(e.cfg.DeviceTokens))
+	all := make(map[string]string, len(e.cfg.DeviceTokens))
+	for _, record := range records {
+		all[record.Token] = record.Name
+	}
 	for token, name := range e.cfg.DeviceTokens {
+		all[token] = name
+	}
+	devices := make([]adminproto.DeviceSnapshot, 0, len(all))
+	for token, name := range all {
 		_, online := e.clients[token]
 		devices = append(devices, adminproto.DeviceSnapshot{DeviceID: deviceTokenID(token), Name: name, Online: online})
 	}
@@ -127,7 +151,8 @@ func (e *Engine) revokeDevice(deviceID string) bool {
 		}
 	}
 	e.mu.Unlock()
-	if revokedToken == "" {
+	storeDeleted := e.devices.Delete(deviceID)
+	if revokedToken == "" && !storeDeleted {
 		return false
 	}
 	for _, s := range e.manager.List() {
@@ -136,6 +161,23 @@ func (e *Engine) revokeDevice(deviceID string) bool {
 	if connection != nil && connection.conn != nil {
 		_ = connection.conn.Close()
 	}
+	return true
+}
+
+func (e *Engine) deviceAuthorized(token string) bool {
+	e.mu.RLock()
+	_, ok := e.cfg.DeviceTokens[token]
+	e.mu.RUnlock()
+	if ok {
+		return true
+	}
+	name, ok := e.devices.Lookup(token)
+	if !ok {
+		return false
+	}
+	e.mu.Lock()
+	e.cfg.DeviceTokens[token] = name
+	e.mu.Unlock()
 	return true
 }
 

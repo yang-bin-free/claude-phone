@@ -30,6 +30,7 @@ type Engine struct {
 	clients   map[string]*client
 	procs     map[string]claudeProc
 	projects  *projectStore
+	devices   *deviceStore
 	startedAt time.Time
 }
 
@@ -41,6 +42,7 @@ func New(cfg Config) *Engine {
 		clients:   map[string]*client{},
 		procs:     map[string]claudeProc{},
 		projects:  newProjectStore(cfg.DataDir),
+		devices:   newDeviceStore(cfg.DataDir),
 		startedAt: time.Now(),
 	}
 	e.factory = func(c session.ClaudeConfig) claudeProc { return session.NewClaudeProc(c) }

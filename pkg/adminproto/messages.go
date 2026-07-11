@@ -33,6 +33,15 @@ type DeviceSnapshot struct {
 	Online   bool   `json:"online"`
 }
 
+type DeviceCredential struct {
+	Device      DeviceSnapshot `json:"device"`
+	DeviceToken string         `json:"deviceToken"`
+}
+
+type CreateDeviceRequest struct {
+	Name string `json:"name"`
+}
+
 type AgentStatus struct {
 	Addr                 string            `json:"addr"`
 	AgentVersion         string            `json:"agentVersion"`

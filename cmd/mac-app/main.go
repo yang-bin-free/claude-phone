@@ -41,8 +41,8 @@ func main() {
 
 	e := engine.New(engine.Config{
 		Addr: *desktopAddr, ClaudeBin: *claudeBin, DefaultWorkingDir: *workdir,
-		DefaultPermission: *permission,
-		DataDir:           *dataDir,
+		DefaultPermission: *permission, DataDir: *dataDir,
+		DeviceTokens: map[string]string{"desktop-" + token: "Mac"},
 	})
 	handler := desktop.NewHandler(e.Handler(), e.AdminHandler(token))
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
