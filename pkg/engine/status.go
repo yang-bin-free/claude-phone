@@ -30,8 +30,8 @@ type SessionSnapshot struct {
 func (e *Engine) Status() StatusReport {
 	e.mu.RLock()
 	connected := make([]string, 0, len(e.clients))
-	for id := range e.clients {
-		connected = append(connected, id)
+	for token := range e.clients {
+		connected = append(connected, e.deviceDisplayName(token))
 	}
 	procs := make(map[string]struct{}, len(e.procs))
 	for id := range e.procs {
@@ -45,12 +45,16 @@ func (e *Engine) Status() StatusReport {
 	snaps := make([]SessionSnapshot, 0, len(sessions))
 	for _, s := range sessions {
 		_, running := procs[s.ID]
+		subscribers := s.Subscribers()
+		for i, token := range subscribers {
+			subscribers[i] = e.safeDeviceDisplayName(token)
+		}
 		snaps = append(snaps, SessionSnapshot{
 			SessionID:   s.ID,
 			Name:        s.Name,
 			Status:      s.Status,
-			Owner:       s.Owner,
-			Subscribers: s.Subscribers(),
+			Owner:       e.safeDeviceDisplayName(s.Owner),
+			Subscribers: subscribers,
 			CreatedAt:   s.CreatedAt,
 			Running:     running,
 		})
@@ -67,4 +71,17 @@ func (e *Engine) Status() StatusReport {
 		ConnectedDevices:     connected,
 		Sessions:             snaps,
 	}
+}
+
+func (e *Engine) deviceDisplayName(token string) string {
+	if name := e.cfg.DeviceTokens[token]; name != "" {
+		return name
+	}
+	return "device-" + deviceTokenID(token)[:8]
+}
+
+func (e *Engine) safeDeviceDisplayName(token string) string {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+	return e.deviceDisplayName(token)
 }

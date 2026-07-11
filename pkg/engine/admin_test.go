@@ -41,7 +41,7 @@ func TestAdminHandlerRejectsUnauthorizedOrRemoteRequests(t *testing.T) {
 }
 
 func TestAdminHandlerReturnsSnapshotAndStopsSession(t *testing.T) {
-	e := New(Config{AgentVersion: "test"})
+	e := New(Config{AgentVersion: "test", DeviceTokens: map[string]string{"dt_super_secret": "Pixel"}})
 	e.manager = session.NewManager(session.ManagerConfig{IDFunc: func() string { return "sess-1" }})
 	s, err := e.manager.Create("demo", "/work", "default", "device-A")
 	if err != nil {
@@ -62,6 +62,22 @@ func TestAdminHandlerReturnsSnapshotAndStopsSession(t *testing.T) {
 	}
 	if snapshot.Agent.AgentVersion != "test" || len(snapshot.Agent.Sessions) != 1 {
 		t.Fatalf("snapshot=%+v", snapshot)
+	}
+	if strings.Contains(statusW.Body.String(), "dt_super_secret") {
+		t.Fatalf("snapshot leaked device token: %s", statusW.Body.String())
+	}
+	if len(snapshot.Devices) != 1 || snapshot.Devices[0].Name != "Pixel" {
+		t.Fatalf("devices=%+v", snapshot.Devices)
+	}
+
+	revokeReq := adminRequest(http.MethodDelete, "/admin/devices/"+snapshot.Devices[0].DeviceID, "", "secret")
+	revokeW := httptest.NewRecorder()
+	h.ServeHTTP(revokeW, revokeReq)
+	if revokeW.Code != http.StatusNoContent {
+		t.Fatalf("revoke status=%d body=%s", revokeW.Code, revokeW.Body.String())
+	}
+	if _, ok := e.cfg.DeviceTokens["dt_super_secret"]; ok {
+		t.Fatal("revoked token remains authorized")
 	}
 
 	stopReq := adminRequest(http.MethodPost, "/admin/sessions/stop", `{"sessionId":"sess-1"}`, "secret")

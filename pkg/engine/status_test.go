@@ -17,6 +17,7 @@ func TestStatusEndpoint(t *testing.T) {
 		DefaultWorkingDir:    "/work",
 		DefaultPermission:    "bypassPermissions",
 		MaxConcurrentSession: 3,
+		DeviceTokens:         map[string]string{"device-A": "Pixel"},
 	})
 	e.manager = session.NewManager(session.ManagerConfig{
 		MaxConcurrent: 3,
@@ -49,7 +50,7 @@ func TestStatusEndpoint(t *testing.T) {
 	if report.AgentVersion != "test" || report.ClaudeVersion != "fake" {
 		t.Fatalf("report mismatch: %+v", report)
 	}
-	if len(report.ConnectedDevices) != 1 || report.ConnectedDevices[0] != "device-A" {
+	if len(report.ConnectedDevices) != 1 || report.ConnectedDevices[0] != "Pixel" {
 		t.Fatalf("connected devices: %+v", report.ConnectedDevices)
 	}
 	if len(report.Sessions) != 1 || report.Sessions[0].SessionID != s.ID {

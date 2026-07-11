@@ -3,9 +3,11 @@ package engine
 import (
 	"crypto/sha256"
 	"crypto/subtle"
+	"encoding/hex"
 	"encoding/json"
 	"net"
 	"net/http"
+	"sort"
 
 	"github.com/yang-bin-free/claude-phone/pkg/adminproto"
 )
@@ -15,7 +17,14 @@ const maxAdminBodyBytes = 64 << 10
 func (e *Engine) AdminHandler(token string) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /admin/status", func(w http.ResponseWriter, _ *http.Request) {
-		writeAdminJSON(w, http.StatusOK, adminproto.Snapshot{Agent: adminStatus(e.Status())})
+		writeAdminJSON(w, http.StatusOK, adminproto.Snapshot{Agent: adminStatus(e.Status()), Devices: e.adminDevices()})
+	})
+	mux.HandleFunc("DELETE /admin/devices/{deviceID}", func(w http.ResponseWriter, r *http.Request) {
+		if !e.revokeDevice(r.PathValue("deviceID")) {
+			http.Error(w, "device not found", http.StatusNotFound)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
 	})
 	mux.HandleFunc("POST /admin/sessions/stop", func(w http.ResponseWriter, r *http.Request) {
 		var request adminproto.StopSessionRequest
@@ -44,6 +53,49 @@ func (e *Engine) AdminHandler(token string) http.Handler {
 		}
 		mux.ServeHTTP(w, r)
 	})
+}
+
+func (e *Engine) adminDevices() []adminproto.DeviceSnapshot {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+	devices := make([]adminproto.DeviceSnapshot, 0, len(e.cfg.DeviceTokens))
+	for token, name := range e.cfg.DeviceTokens {
+		_, online := e.clients[token]
+		devices = append(devices, adminproto.DeviceSnapshot{DeviceID: deviceTokenID(token), Name: name, Online: online})
+	}
+	sort.Slice(devices, func(i, j int) bool { return devices[i].Name < devices[j].Name })
+	return devices
+}
+
+func (e *Engine) revokeDevice(deviceID string) bool {
+	var revokedToken string
+	var connection *client
+	e.mu.Lock()
+	for token := range e.cfg.DeviceTokens {
+		if deviceTokenID(token) == deviceID {
+			revokedToken = token
+			delete(e.cfg.DeviceTokens, token)
+			connection = e.clients[token]
+			delete(e.clients, token)
+			break
+		}
+	}
+	e.mu.Unlock()
+	if revokedToken == "" {
+		return false
+	}
+	for _, s := range e.manager.List() {
+		s.Unsubscribe(revokedToken)
+	}
+	if connection != nil && connection.conn != nil {
+		_ = connection.conn.Close()
+	}
+	return true
+}
+
+func deviceTokenID(token string) string {
+	sum := sha256.Sum256([]byte(token))
+	return hex.EncodeToString(sum[:8])
 }
 
 func isLoopbackRemote(remoteAddr string) bool {
