@@ -194,8 +194,8 @@ gomobile 兼容绕过：当前 x/mobile 的 `gomobile bind` 会在临时 ABI 目
 
 ```bash
 claude-phone-agent              # 启动服务（常驻后台）
-claude-phone-agent key          # 生成一次性配对 Auth Key
-claude-phone-agent status       # 查看连接的设备、活跃会话、资源状态
+claude-phone-agent key          # 生成一次性配对 Key（当前为本地占位）
+claude-phone-agent status       # 查看连接的设备、活跃会话、资源状态（HTTP /status）
 ```
 
 ### 4.2 内部组件

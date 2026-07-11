@@ -1,6 +1,7 @@
 package engine
 
 import (
+	"encoding/json"
 	"errors"
 	"net"
 	"net/http"
@@ -54,6 +55,10 @@ func (e *Engine) Manager() *session.Manager {
 func (e *Engine) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/ws", e.HandleWS)
+	mux.HandleFunc("/status", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(e.Status())
+	})
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte("ok\n"))
