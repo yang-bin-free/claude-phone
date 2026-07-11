@@ -6,10 +6,12 @@
     const token = window.claudePhone.adminToken;
     const response = await fetch("/admin/status", { headers: { Authorization: `Bearer ${token}` } });
     if (!response.ok) throw new Error(`admin status ${response.status}`);
-    const { agent, devices, projects } = await response.json();
+    const { agent, devices, projects, diagnostics } = await response.json();
     document.querySelector("#metrics").innerHTML = [
       ["在线设备", agent.connectedDevices?.length || 0], ["活跃会话", agent.sessions?.length || 0],
-      ["Agent", agent.agentVersion], ["Claude", agent.claudeVersion]
+      ["Agent", agent.agentVersion], ["Claude", agent.claudeVersion],
+      ["运行时间", `${diagnostics.uptimeSeconds}s`], ["内存", `${Math.round(diagnostics.allocBytes / 1048576)} MB`],
+      ["Goroutine", diagnostics.goroutines], ["平台", `${diagnostics.goos}/${diagnostics.goarch}`]
     ].map(([label, value]) => `<article><span>${label}</span><strong>${value}</strong></article>`).join("");
     document.querySelector("#admin-sessions").textContent = agent.sessions?.length ? JSON.stringify(agent.sessions, null, 2) : "暂无活跃会话";
     const deviceList = document.querySelector("#admin-devices");

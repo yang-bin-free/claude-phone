@@ -7,7 +7,10 @@ import (
 	"encoding/json"
 	"net"
 	"net/http"
+	"os"
+	"runtime"
 	"sort"
+	"time"
 
 	"github.com/yang-bin-free/claude-phone/pkg/adminproto"
 )
@@ -22,7 +25,9 @@ func (e *Engine) AdminHandler(token string) http.Handler {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		writeAdminJSON(w, http.StatusOK, adminproto.Snapshot{Agent: adminStatus(e.Status()), Devices: e.adminDevices(), Projects: projects})
+		writeAdminJSON(w, http.StatusOK, adminproto.Snapshot{
+			Agent: adminStatus(e.Status()), Devices: e.adminDevices(), Projects: projects, Diagnostics: e.diagnostics(),
+		})
 	})
 	mux.HandleFunc("POST /admin/projects", func(w http.ResponseWriter, r *http.Request) {
 		var project adminproto.Project
@@ -83,6 +88,17 @@ func (e *Engine) AdminHandler(token string) http.Handler {
 		}
 		mux.ServeHTTP(w, r)
 	})
+}
+
+func (e *Engine) diagnostics() adminproto.Diagnostics {
+	var memory runtime.MemStats
+	runtime.ReadMemStats(&memory)
+	return adminproto.Diagnostics{
+		GoVersion: runtime.Version(), GOOS: runtime.GOOS, GOARCH: runtime.GOARCH,
+		PID: os.Getpid(), UptimeSeconds: int64(time.Since(e.startedAt).Seconds()),
+		Goroutines: runtime.NumGoroutine(), AllocBytes: memory.Alloc, SysBytes: memory.Sys,
+		DataDir: e.cfg.DataDir,
+	}
 }
 
 func (e *Engine) adminDevices() []adminproto.DeviceSnapshot {

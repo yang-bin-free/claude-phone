@@ -2,6 +2,10 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
 
     <application
         android:label="Claude Phone"
@@ -20,7 +24,11 @@
         <service
             android:name=".IPNServiceImpl"
             android:permission="android.permission.BIND_VPN_SERVICE"
+            android:foregroundServiceType="specialUse"
             android:exported="false">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Maintains the user-authorized Claude Phone VPN and tailnet connection" />
             <intent-filter>
                 <action android:name="android.net.VpnService" />
             </intent-filter>

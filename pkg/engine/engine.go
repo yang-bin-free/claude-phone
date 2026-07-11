@@ -6,6 +6,7 @@ import (
 	"net"
 	"net/http"
 	"sync"
+	"time"
 
 	"github.com/yang-bin-free/claude-phone/pkg/session"
 )
@@ -25,20 +26,22 @@ type Engine struct {
 	factory ClaudeFactory
 	server  *http.Server
 
-	mu       sync.RWMutex
-	clients  map[string]*client
-	procs    map[string]claudeProc
-	projects *projectStore
+	mu        sync.RWMutex
+	clients   map[string]*client
+	procs     map[string]claudeProc
+	projects  *projectStore
+	startedAt time.Time
 }
 
 func New(cfg Config) *Engine {
 	cfg = cfg.withDefaults()
 	e := &Engine{
-		cfg:      cfg,
-		manager:  session.NewManager(session.ManagerConfig{MaxConcurrent: cfg.MaxConcurrentSession}),
-		clients:  map[string]*client{},
-		procs:    map[string]claudeProc{},
-		projects: newProjectStore(cfg.DataDir),
+		cfg:       cfg,
+		manager:   session.NewManager(session.ManagerConfig{MaxConcurrent: cfg.MaxConcurrentSession}),
+		clients:   map[string]*client{},
+		procs:     map[string]claudeProc{},
+		projects:  newProjectStore(cfg.DataDir),
+		startedAt: time.Now(),
 	}
 	e.factory = func(c session.ClaudeConfig) claudeProc { return session.NewClaudeProc(c) }
 	return e

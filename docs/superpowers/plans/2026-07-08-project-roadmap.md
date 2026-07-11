@@ -10,7 +10,7 @@
 
 - **已完成**：P0a；P0b Android Tailscale AAR/VpnService 桥；P1 引擎核心；Mac 桌面本地管理 API、共享聊天 UI 与原生 WebView。
 - **进行中（线 A）**：P0c 实机跨网络验收，等待 Android 设备与有效 Tailscale Auth Key。
-- **进行中（线 B）**：Plan 2 Mac 桌面 GUI 的菜单栏常驻与关窗隐藏生命周期。
+- **已实现待验证（线 B）**：Plan 2 Mac 桌面 GUI、菜单栏常驻、关窗隐藏、设备/项目/诊断管理。
 
 ## 2. 两条并行线
 
@@ -80,9 +80,9 @@ Mac（线 B）与 Android（线 A）共享 `web/chat` 的**逻辑层 + 结构层
 
 ## 7. 本会话（线 B）的下一步
 
-1. 完成 Plan 2 Darwin 菜单栏常驻和关窗隐藏生命周期。
-2. 补齐管理区的设备吊销、工作目录与诊断操作。
-3. Android 设备与 Auth Key 就绪后执行 **M2（P0c）** 实机联调。
+1. Android 设备与 Auth Key 就绪后执行 **M2（P0c）** 实机联调。
+2. 在非沙箱 macOS 桌面验证菜单栏、关窗隐藏和优雅退出。
+3. 配置发布者签名凭据后完成 Mac 公证和 Android release 签名。
 
 ## 8. 未纳入当前规划（V2+，README §8）
 

@@ -21,3 +21,4 @@ header { border-bottom: 1px solid #2a2e39; display: flex; align-items: center; j
 .empty { color: #7f8798; text-align: center; margin-top: 20vh; }
 #composer { border-top: 1px solid #2a2e39; padding: 16px 22px; display: flex; gap: 12px; }
 #prompt { resize: none; flex: 1; border: 1px solid #343a48; border-radius: 12px; background: #1b1e26; color: inherit; padding: 12px; }
+#voice-mobile { display: none; }

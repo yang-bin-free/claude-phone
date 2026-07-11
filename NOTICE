@@ -1,0 +1,16 @@
+Claude Phone
+Copyright (c) 2026 Yang Bin
+
+This product includes software developed by Tailscale Inc. and contributors,
+licensed under the BSD 3-Clause License.
+Copyright (c) 2020 Tailscale Inc & contributors.
+
+This product includes Gorilla WebSocket, licensed under the BSD 2-Clause
+License. Copyright (c) 2013 The Gorilla WebSocket Authors.
+
+This product includes webview/webview and webview/webview_go, licensed under
+the MIT License. Copyright (c) 2017 Serge Zaitsev and (c) 2020 webview.
+
+This product includes getlantern/systray, licensed under the Apache License 2.0.
+
+Complete notices and license references are listed in THIRD_PARTY_LICENSES.md.

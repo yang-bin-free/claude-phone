@@ -1,0 +1,59 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  go-and-security:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: go.sum
+      - run: go test ./...
+      - run: go test -race ./pkg/engine
+      - run: go build ./cmd/mac-agent ./cmd/mac-app
+      - run: ./scripts/build-mac-app.sh
+      - run: node --check web/chat/chat.js && node --check web/admin/admin.js
+      - name: Check secrets and licenses
+        shell: bash
+        run: |
+          if rg -n --hidden -g '!.git/**' 'tskey-auth-[A-Za-z0-9_-]{8,}' .; then
+            echo "Tailscale Auth Key detected" >&2
+            exit 1
+          fi
+          for file in pkg/androidlib/tailscale/multitun.go pkg/androidlib/tailscale/vpnfacade.go; do
+            rg -q 'SPDX-License-Identifier: BSD-3-Clause' "$file"
+          done
+          test -f LICENSE
+          test -f NOTICE
+          test -f THIRD_PARTY_LICENSES.md
+
+  android:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: go.sum
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Install gomobile
+        run: |
+          go install golang.org/x/mobile/cmd/gomobile@v0.0.0-20260611195102-4dd8f1dbf5d2
+          gomobile init
+      - name: Build Android AAR and APK
+        run: |
+          REBUILD_AAR=1 ./scripts/build-android-aar.sh
+          ./scripts/test-android-aar.sh
+          cd android
+          ./build-android.sh clean :app:assembleDebug --no-daemon

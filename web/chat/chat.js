@@ -9,7 +9,11 @@
   const deviceToken = params.get("deviceToken") || `${platform}-${token || "local"}`;
   const deviceName = params.get("deviceName") || (platform === "mobile" ? "Android" : "Mac");
   document.body.classList.add(platform);
-  window.claudePhone = { adminToken: token, state };
+  window.claudePhone = {
+    adminToken: token,
+    state,
+    setPrompt(value) { document.querySelector("#prompt").value = value || ""; }
+  };
 
   function append(role, text) {
     messages.querySelector(".empty")?.remove();
@@ -121,6 +125,9 @@
   });
   document.querySelector("#open-settings").addEventListener("click", () => {
     if (window.AndroidBridge?.openSettings) AndroidBridge.openSettings();
+  });
+  document.querySelector("#voice-mobile").addEventListener("click", () => {
+    if (window.AndroidBridge?.startVoice) AndroidBridge.startVoice();
   });
   document.querySelector("#composer").addEventListener("submit", event => {
     event.preventDefault();

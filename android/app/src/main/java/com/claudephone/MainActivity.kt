@@ -1,7 +1,9 @@
 package com.claudephone
 
 import android.app.Activity
+import android.Manifest
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.graphics.Color
 import android.net.Uri
 import android.net.VpnService
@@ -10,6 +12,7 @@ import android.text.InputType
 import android.view.ViewGroup
 import android.webkit.WebChromeClient
 import android.webkit.JavascriptInterface
+import android.webkit.WebResourceRequest
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.Button
@@ -17,6 +20,8 @@ import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.TextView
 import java.util.UUID
+import android.speech.RecognizerIntent
+import org.json.JSONObject
 
 class MainActivity : Activity() {
 
@@ -101,6 +106,10 @@ class MainActivity : Activity() {
         if (requestCode == VPN_REQUEST_CODE && resultCode == RESULT_OK) {
             startVpnAndOpenChat()
         }
+        if (requestCode == VOICE_REQUEST_CODE && resultCode == RESULT_OK) {
+            val text = data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)?.firstOrNull().orEmpty()
+            currentWebView?.evaluateJavascript("window.claudePhone.setPrompt(${JSONObject.quote(text)})", null)
+        }
     }
 
     private fun startVpnAndOpenChat() {
@@ -110,7 +119,7 @@ class MainActivity : Activity() {
             putExtra(IPNServiceImpl.EXTRA_AUTH_KEY, authKey.text.toString().trim())
             putExtra(IPNServiceImpl.EXTRA_CONTROL_URL, controlUrl.text.toString().trim())
         }
-        startService(serviceIntent)
+        startForegroundService(serviceIntent)
 
         val deviceToken = prefs.getString(KEY_DEVICE_TOKEN, null) ?: UUID.randomUUID().toString().also {
             prefs.edit().putString(KEY_DEVICE_TOKEN, it).apply()
@@ -125,7 +134,11 @@ class MainActivity : Activity() {
         val webView = WebView(this).apply {
             settings.javaScriptEnabled = true
             settings.domStorageEnabled = true
-            webViewClient = WebViewClient()
+            webViewClient = object : WebViewClient() {
+                override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
+                    return !request.url.toString().startsWith("file:///android_asset/")
+                }
+            }
             webChromeClient = WebChromeClient()
             addJavascriptInterface(AndroidBridge(), "AndroidBridge")
             loadUrl(page.toString())
@@ -164,6 +177,32 @@ class MainActivity : Activity() {
         fun openSettings() {
             runOnUiThread { disconnectAndShowSettings() }
         }
+
+        @JavascriptInterface
+        fun startVoice() {
+            runOnUiThread {
+                if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
+                    launchVoiceRecognition()
+                } else {
+                    requestPermissions(arrayOf(Manifest.permission.RECORD_AUDIO), AUDIO_PERMISSION_CODE)
+                }
+            }
+        }
+    }
+
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == AUDIO_PERMISSION_CODE && grantResults.firstOrNull() == PackageManager.PERMISSION_GRANTED) {
+            launchVoiceRecognition()
+        }
+    }
+
+    private fun launchVoiceRecognition() {
+        val voiceIntent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+            putExtra(RecognizerIntent.EXTRA_PROMPT, "说出要发送给 Claude 的内容")
+        }
+        startActivityForResult(voiceIntent, VOICE_REQUEST_CODE)
     }
 
     companion object {
@@ -172,5 +211,7 @@ class MainActivity : Activity() {
         private const val KEY_MAC_ADDRESS = "mac_address"
         private const val KEY_CONTROL_URL = "control_url"
         private const val KEY_DEVICE_TOKEN = "device_token"
+        private const val VOICE_REQUEST_CODE = 101
+        private const val AUDIO_PERMISSION_CODE = 102
     }
 }

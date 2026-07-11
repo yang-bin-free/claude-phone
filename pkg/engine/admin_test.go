@@ -120,6 +120,9 @@ func TestAdminHandlerReturnsSnapshotAndStopsSession(t *testing.T) {
 	if len(snapshot.Devices) != 1 || snapshot.Devices[0].Name != "Pixel" {
 		t.Fatalf("devices=%+v", snapshot.Devices)
 	}
+	if snapshot.Diagnostics.GoVersion == "" || snapshot.Diagnostics.GOOS == "" || snapshot.Diagnostics.DataDir == "" {
+		t.Fatalf("diagnostics=%+v", snapshot.Diagnostics)
+	}
 
 	revokeReq := adminRequest(http.MethodDelete, "/admin/devices/"+snapshot.Devices[0].DeviceID, "", "secret")
 	revokeW := httptest.NewRecorder()

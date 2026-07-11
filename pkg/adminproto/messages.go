@@ -2,9 +2,22 @@
 package adminproto
 
 type Snapshot struct {
-	Agent    AgentStatus      `json:"agent"`
-	Devices  []DeviceSnapshot `json:"devices"`
-	Projects []Project        `json:"projects"`
+	Agent       AgentStatus      `json:"agent"`
+	Devices     []DeviceSnapshot `json:"devices"`
+	Projects    []Project        `json:"projects"`
+	Diagnostics Diagnostics      `json:"diagnostics"`
+}
+
+type Diagnostics struct {
+	GoVersion     string `json:"goVersion"`
+	GOOS          string `json:"goos"`
+	GOARCH        string `json:"goarch"`
+	PID           int    `json:"pid"`
+	UptimeSeconds int64  `json:"uptimeSeconds"`
+	Goroutines    int    `json:"goroutines"`
+	AllocBytes    uint64 `json:"allocBytes"`
+	SysBytes      uint64 `json:"sysBytes"`
+	DataDir       string `json:"dataDir"`
 }
 
 type Project struct {

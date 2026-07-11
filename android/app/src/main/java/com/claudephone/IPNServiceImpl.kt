@@ -1,5 +1,9 @@
 package com.claudephone
 
+import android.app.Notification
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.PendingIntent
 import android.content.Context
 import android.net.IpPrefix
 import android.net.VpnService
@@ -26,6 +30,15 @@ class IPNServiceImpl : VpnService(), IPNService {
     private var uniqueId: String = "ipn-${System.currentTimeMillis()}"
     private var backend: EngineBackend? = null
 
+    override fun onCreate() {
+        super.onCreate()
+        val manager = getSystemService(NotificationManager::class.java)
+        manager.createNotificationChannel(
+            NotificationChannel(NOTIFICATION_CHANNEL, "Claude Phone VPN", NotificationManager.IMPORTANCE_LOW)
+        )
+        startForeground(NOTIFICATION_ID, notification("正在连接 Mac…"))
+    }
+
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (backend == null) {
             val stateDir = filesDir.resolve("tailscale").apply { mkdirs() }
@@ -49,6 +62,7 @@ class IPNServiceImpl : VpnService(), IPNService {
         backend?.disconnectVPN(this)
         backend?.close()
         backend = null
+        stopForeground(STOP_FOREGROUND_REMOVE)
         super.onDestroy()
     }
 
@@ -67,12 +81,35 @@ class IPNServiceImpl : VpnService(), IPNService {
 
     override fun close() { stopSelf() }
     override fun disconnectVPN() { stopSelf() }
-    override fun updateVpnStatus(connected: Boolean) { /* TODO: notify UI */ }
+    override fun updateVpnStatus(connected: Boolean) {
+        getSystemService(NotificationManager::class.java).notify(
+            NOTIFICATION_ID,
+            notification(if (connected) "已连接，手机可访问 Mac" else "连接已断开")
+        )
+    }
+
+    private fun notification(status: String): Notification {
+        val openApp = PendingIntent.getActivity(
+            this,
+            0,
+            Intent(this, MainActivity::class.java),
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+        )
+        return Notification.Builder(this, NOTIFICATION_CHANNEL)
+            .setSmallIcon(android.R.drawable.stat_sys_upload_done)
+            .setContentTitle("Claude Phone")
+            .setContentText(status)
+            .setContentIntent(openApp)
+            .setOngoing(true)
+            .build()
+    }
 
     companion object {
         const val EXTRA_HOSTNAME = "hostname"
         const val EXTRA_AUTH_KEY = "auth_key"
         const val EXTRA_CONTROL_URL = "control_url"
+        private const val NOTIFICATION_CHANNEL = "claude_phone_vpn"
+        private const val NOTIFICATION_ID = 1001
     }
 }
 
