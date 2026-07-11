@@ -34,8 +34,27 @@
     state.assistantChunk = null;
     document.querySelector("#view-title").textContent = name || "会话";
     document.querySelector("#stop-session").disabled = false;
+    messages.replaceChildren();
     send({ type: "control", action: "select_session", sessionId });
+    send({ type: "control", action: "load_history", sessionId, limit: 500 });
     renderSessions();
+  }
+
+  function renderHistory(items) {
+    messages.replaceChildren();
+    state.assistantChunk = null;
+    let assistant = null;
+    (items || []).forEach(item => {
+      if (item.type === "text") {
+        append("user", item.content || "");
+        assistant = null;
+      } else if (item.type === "token") {
+        if (!assistant) assistant = append("assistant", "");
+        assistant.textContent += item.content || "";
+      } else if (item.type === "done") {
+        assistant = null;
+      }
+    });
   }
 
   function renderSessions() {
@@ -86,6 +105,9 @@
           document.querySelector("#view-title").textContent = msg.name || "新会话";
           document.querySelector("#stop-session").disabled = false;
           send({ type: "control", action: "list_sessions", limit: 100 });
+          break;
+        case "history":
+          if (msg.sessionId === state.sessionId) renderHistory(msg.messages);
           break;
         case "thinking":
           state.assistantChunk = null;

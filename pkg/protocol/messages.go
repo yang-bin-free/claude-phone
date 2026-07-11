@@ -158,6 +158,12 @@ type PongMsg struct {
 	Type string `json:"type"`
 }
 
+type HistoryMsg struct {
+	Type      string            `json:"type"`
+	SessionID string            `json:"sessionId"`
+	Messages  []json.RawMessage `json:"messages"`
+}
+
 type ToolUseMsg struct {
 	Type  string `json:"type"`
 	Tool  string `json:"tool"`

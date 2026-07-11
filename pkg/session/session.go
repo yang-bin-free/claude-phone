@@ -8,12 +8,13 @@ type SenderFunc func(deviceID string, payload []byte)
 
 // Session 表示一个 claude 会话及其订阅者。
 type Session struct {
-	ID        string
-	Name      string
-	Cwd       string
-	Owner     string
-	Status    string // active | dormant | stopped
-	CreatedAt int64
+	ID         string
+	Name       string
+	Cwd        string
+	Owner      string
+	Permission string
+	Status     string // active | dormant | stopped
+	CreatedAt  int64
 
 	mu     sync.RWMutex
 	subs   map[string]struct{}

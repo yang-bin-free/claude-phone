@@ -45,6 +45,7 @@ func TestWebSocket_ListProjectsUsesAdminProjectStore(t *testing.T) {
 
 func TestWebSocket_CreateSessionAndStream(t *testing.T) {
 	e := New(Config{
+		DataDir:           t.TempDir(),
 		AgentVersion:      "test",
 		ClaudeVersion:     "fake",
 		ClaudeBin:         "../../testdata/fake-claude.sh",
@@ -107,6 +108,7 @@ func TestWebSocket_RejectsUnknownDevice(t *testing.T) {
 
 func TestWebSocket_StreamFanoutToTwoSubscribers(t *testing.T) {
 	e := New(Config{
+		DataDir:           t.TempDir(),
 		AgentVersion:      "test",
 		ClaudeVersion:     "fake",
 		ClaudeBin:         "../../testdata/fake-claude.sh",

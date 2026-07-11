@@ -58,14 +58,28 @@ func NewManager(cfg ManagerConfig) *Manager {
 func (m *Manager) Create(name, cwd, permission, owner string) (*Session, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	if len(m.byID) >= m.cfg.MaxConcurrent {
+	active := 0
+	for _, existing := range m.byID {
+		if existing.Status == "active" {
+			active++
+		}
+	}
+	if active >= m.cfg.MaxConcurrent {
 		return nil, ErrSessionLimit
 	}
 	id := m.cfg.IDFunc()
 	s := NewSession(id, name, cwd, owner)
+	s.Permission = permission
 	s.CreatedAt = m.cfg.Now()
 	m.byID[id] = s
 	return s, nil
+}
+
+// Restore adds a persisted session without applying the active-session limit.
+func (m *Manager) Restore(s *Session) {
+	m.mu.Lock()
+	m.byID[s.ID] = s
+	m.mu.Unlock()
 }
 
 // Get 按 ID 查会话。

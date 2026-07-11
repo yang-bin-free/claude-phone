@@ -27,6 +27,7 @@ func TestSharedChatAssetsSupportMobileRemoteConnection(t *testing.T) {
 		"params.get(\"ws\")", "params.get(\"deviceToken\")", "params.get(\"platform\")",
 		"case \"session_list\"", "assistantChunk", "action: \"select_session\"",
 		"action: \"stop_session\"", "AndroidBridge.openSettings",
+		"action: \"load_history\"", "case \"history\"",
 		"/admin/devices/", "revokeDevice",
 		"/admin/projects", "deleteProject",
 		"AndroidBridge.startVoice", "setPrompt",

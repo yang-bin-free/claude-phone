@@ -151,6 +151,11 @@ func (e *Engine) handleControl(cl *client, currentSession string, raw []byte) (s
 		if !ok {
 			return currentSession, session.ErrSessionNotFound
 		}
+		if s.Status == "dormant" {
+			if err := e.resumeSession(s); err != nil {
+				return currentSession, err
+			}
+		}
 		s.Subscribe(cl.deviceID)
 		return s.ID, nil
 	case protocol.ActionLeaveSession:
@@ -197,6 +202,19 @@ func (e *Engine) handleControl(cl *client, currentSession string, raw []byte) (s
 			items = append(items, protocol.ProjectInfo{Name: project.Name, Path: project.Path, Permission: project.Permission})
 		}
 		return currentSession, cl.writeJSON(protocol.ProjectListMsg{Type: protocol.TypeProjectList, Projects: items})
+	case protocol.ActionLoadHistory:
+		sessionID := msg.SessionID
+		if sessionID == "" {
+			sessionID = currentSession
+		}
+		if _, ok := e.manager.Get(sessionID); !ok {
+			return currentSession, session.ErrSessionNotFound
+		}
+		messages, err := e.history.Load(sessionID, msg.Limit)
+		if err != nil {
+			return currentSession, err
+		}
+		return currentSession, cl.writeJSON(protocol.HistoryMsg{Type: "history", SessionID: sessionID, Messages: messages})
 	case protocol.ActionPing, protocol.ActionWaitLonger:
 		return currentSession, cl.writeJSON(protocol.PongMsg{Type: protocol.TypePong})
 	case protocol.ActionCancel, protocol.ActionForceKill:
@@ -259,6 +277,10 @@ func (e *Engine) createSession(cl *client, msg protocol.ControlMsg) (string, err
 		return "", err
 	}
 	s.SetSender(e.send)
+	if err := e.history.CreateSession(s); err != nil {
+		e.manager.Remove(s.ID)
+		return "", err
+	}
 
 	proc := e.factory(session.ClaudeConfig{
 		Bin:        e.cfg.ClaudeBin,
@@ -267,7 +289,10 @@ func (e *Engine) createSession(cl *client, msg protocol.ControlMsg) (string, err
 		Permission: permission,
 		AddDirs:    []string{cwd},
 	})
-	proc.OnOutput(func(payload []byte) { s.Broadcast(payload) })
+	proc.OnOutput(func(payload []byte) {
+		_ = e.history.Append(s.ID, payload)
+		s.Broadcast(payload)
+	})
 	if err := proc.Start(); err != nil {
 		e.manager.Remove(s.ID)
 		return "", err
@@ -287,12 +312,43 @@ func (e *Engine) createSession(cl *client, msg protocol.ControlMsg) (string, err
 	return s.ID, nil
 }
 
+func (e *Engine) resumeSession(s *session.Session) error {
+	e.resumeMu.Lock()
+	defer e.resumeMu.Unlock()
+	e.mu.RLock()
+	existing := e.procs[s.ID]
+	e.mu.RUnlock()
+	if existing != nil {
+		s.SetStatus("active")
+		return nil
+	}
+	proc := e.factory(session.ClaudeConfig{
+		Bin: e.cfg.ClaudeBin, Cwd: s.Cwd, SessionID: s.ID, Permission: s.Permission,
+		AddDirs: []string{s.Cwd}, Resume: true,
+	})
+	proc.OnOutput(func(payload []byte) {
+		_ = e.history.Append(s.ID, payload)
+		s.Broadcast(payload)
+	})
+	if err := proc.Start(); err != nil {
+		return err
+	}
+	e.mu.Lock()
+	e.procs[s.ID] = proc
+	e.mu.Unlock()
+	s.SetStatus("active")
+	return nil
+}
+
 func (e *Engine) handleText(sessionID string, raw []byte) error {
 	if sessionID == "" {
 		return session.ErrSessionNotFound
 	}
 	var msg protocol.TextMsg
 	if err := json.Unmarshal(raw, &msg); err != nil {
+		return err
+	}
+	if err := e.history.Append(sessionID, raw); err != nil {
 		return err
 	}
 	e.mu.RLock()

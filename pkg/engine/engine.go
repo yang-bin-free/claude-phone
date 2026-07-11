@@ -27,10 +27,12 @@ type Engine struct {
 	server  *http.Server
 
 	mu        sync.RWMutex
+	resumeMu  sync.Mutex
 	clients   map[string]*client
 	procs     map[string]claudeProc
 	projects  *projectStore
 	devices   *deviceStore
+	history   *historyStore
 	startedAt time.Time
 }
 
@@ -43,9 +45,17 @@ func New(cfg Config) *Engine {
 		procs:     map[string]claudeProc{},
 		projects:  newProjectStore(cfg.DataDir),
 		devices:   newDeviceStore(cfg.DataDir),
+		history:   newHistoryStore(cfg.DataDir),
 		startedAt: time.Now(),
 	}
 	e.factory = func(c session.ClaudeConfig) claudeProc { return session.NewClaudeProc(c) }
+	if persisted, err := e.history.Restore(); err == nil {
+		for _, sess := range persisted {
+			sess.SetSender(e.send)
+			sess.Unsubscribe(sess.Owner)
+			e.manager.Restore(sess)
+		}
+	}
 	return e
 }
 

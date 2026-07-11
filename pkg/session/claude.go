@@ -16,6 +16,7 @@ type ClaudeConfig struct {
 	SessionID  string   // 固定 session-id，支持 --resume
 	Permission string   // bypassPermissions | acceptEdits | default
 	AddDirs    []string // 额外 --add-dir
+	Resume     bool
 }
 
 // OutputFunc 接收一行 claude stdout 的原始 JSON。
@@ -49,14 +50,18 @@ func (p *ClaudeProc) OnOutput(fn OutputFunc) {
 
 // buildArgs 组装 claude CLI 参数（README §4.5）。
 func (p *ClaudeProc) buildArgs() []string {
-	args := []string{
-		"--print",
-		"--session-id", p.cfg.SessionID,
+	args := []string{"--print"}
+	if p.cfg.Resume {
+		args = append(args, "--resume", p.cfg.SessionID)
+	} else {
+		args = append(args, "--session-id", p.cfg.SessionID)
+	}
+	args = append(args,
 		"--input-format", "stream-json",
 		"--output-format", "stream-json",
 		"--permission-mode", p.cfg.Permission,
 		"--replay-user-messages",
-	}
+	)
 	for _, d := range p.cfg.AddDirs {
 		args = append(args, "--add-dir", d)
 	}
