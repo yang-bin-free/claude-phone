@@ -9,6 +9,7 @@ import android.os.Bundle
 import android.text.InputType
 import android.view.ViewGroup
 import android.webkit.WebChromeClient
+import android.webkit.JavascriptInterface
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.Button
@@ -22,6 +23,7 @@ class MainActivity : Activity() {
     private lateinit var macAddress: EditText
     private lateinit var authKey: EditText
     private lateinit var controlUrl: EditText
+    private var currentWebView: WebView? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -29,6 +31,8 @@ class MainActivity : Activity() {
     }
 
     private fun showPairingScreen() {
+        currentWebView?.destroy()
+        currentWebView = null
         val prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
         val container = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -118,13 +122,16 @@ class MainActivity : Activity() {
             .appendQueryParameter("deviceName", android.os.Build.MODEL ?: "Android")
             .build()
 
-        setContentView(WebView(this).apply {
+        val webView = WebView(this).apply {
             settings.javaScriptEnabled = true
             settings.domStorageEnabled = true
             webViewClient = WebViewClient()
             webChromeClient = WebChromeClient()
+            addJavascriptInterface(AndroidBridge(), "AndroidBridge")
             loadUrl(page.toString())
-        })
+        }
+        currentWebView = webView
+        setContentView(webView)
     }
 
     private fun webSocketURL(value: String): String {
@@ -136,6 +143,27 @@ class MainActivity : Activity() {
             else -> "ws://$trimmed"
         }
         return if (base.endsWith("/ws")) base else "$base/ws"
+    }
+
+    @Suppress("DEPRECATION")
+    override fun onBackPressed() {
+        if (currentWebView != null) {
+            disconnectAndShowSettings()
+        } else {
+            super.onBackPressed()
+        }
+    }
+
+    private fun disconnectAndShowSettings() {
+        stopService(Intent(this, IPNServiceImpl::class.java))
+        showPairingScreen()
+    }
+
+    private inner class AndroidBridge {
+        @JavascriptInterface
+        fun openSettings() {
+            runOnUiThread { disconnectAndShowSettings() }
+        }
     }
 
     companion object {

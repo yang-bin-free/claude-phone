@@ -6,6 +6,9 @@
 .session-item:hover, .session-item.active { color: white; background: #252a35; }
 .workspace { display: grid; grid-template-rows: 58px minmax(0, 1fr); }
 header { border-bottom: 1px solid #2a2e39; display: flex; align-items: center; justify-content: space-between; padding: 0 22px; }
+.header-actions { display: flex; gap: 6px; }
+#open-settings { display: none; }
+#stop-session:disabled { opacity: .4; cursor: default; }
 #new-session-mobile { display: none; }
 #mobile-session-select { display: none; }
 #connection-state { color: #929bad; font-size: 13px; }

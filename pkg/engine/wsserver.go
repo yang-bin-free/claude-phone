@@ -47,7 +47,7 @@ func (e *Engine) HandleWS(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	e.addClient(cl)
-	defer e.removeClient(cl.deviceID)
+	defer e.removeClient(cl)
 
 	_ = cl.writeJSON(protocol.HelloMsg{
 		Type:            protocol.TypeHello,
@@ -118,11 +118,15 @@ func (e *Engine) addClient(cl *client) {
 	e.mu.Unlock()
 }
 
-func (e *Engine) removeClient(deviceID string) {
+func (e *Engine) removeClient(cl *client) {
 	e.mu.Lock()
-	delete(e.clients, deviceID)
+	if e.clients[cl.deviceID] != cl {
+		e.mu.Unlock()
+		return
+	}
+	delete(e.clients, cl.deviceID)
 	for _, s := range e.manager.List() {
-		s.Unsubscribe(deviceID)
+		s.Unsubscribe(cl.deviceID)
 	}
 	e.mu.Unlock()
 }

@@ -29,6 +29,7 @@
     state.sessionId = sessionId;
     state.assistantChunk = null;
     document.querySelector("#view-title").textContent = name || "会话";
+    document.querySelector("#stop-session").disabled = false;
     send({ type: "control", action: "select_session", sessionId });
     renderSessions();
   }
@@ -79,6 +80,7 @@
           state.sessionId = msg.sessionId;
           state.assistantChunk = null;
           document.querySelector("#view-title").textContent = msg.name || "新会话";
+          document.querySelector("#stop-session").disabled = false;
           send({ type: "control", action: "list_sessions", limit: 100 });
           break;
         case "thinking":
@@ -93,7 +95,11 @@
           state.assistantChunk = null;
           break;
         case "session_stopped":
-          if (state.sessionId === msg.sessionId) state.sessionId = "";
+          if (state.sessionId === msg.sessionId) {
+            state.sessionId = "";
+            document.querySelector("#view-title").textContent = "新会话";
+            document.querySelector("#stop-session").disabled = true;
+          }
           send({ type: "control", action: "list_sessions", limit: 100 });
           break;
         case "error":
@@ -109,6 +115,12 @@
   document.querySelector("#mobile-session-select").addEventListener("change", event => {
     const session = state.sessions.find(item => item.sessionId === event.target.value);
     if (session) selectSession(session.sessionId, session.name);
+  });
+  document.querySelector("#stop-session").addEventListener("click", () => {
+    if (state.sessionId) send({ type: "control", action: "stop_session", sessionId: state.sessionId });
+  });
+  document.querySelector("#open-settings").addEventListener("click", () => {
+    if (window.AndroidBridge?.openSettings) AndroidBridge.openSettings();
   });
   document.querySelector("#composer").addEventListener("submit", event => {
     event.preventDefault();

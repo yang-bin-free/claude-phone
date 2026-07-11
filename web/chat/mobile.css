@@ -5,6 +5,10 @@ body.mobile { background: #111318; }
 .mobile header { padding: env(safe-area-inset-top) 14px 0; }
 .mobile #new-session-mobile { display: inline-flex; width: 38px; height: 38px; align-items: center; justify-content: center; font-size: 22px; }
 .mobile #mobile-session-select { display: block; max-width: 120px; border: 0; border-radius: 8px; background: #20242d; color: #edf0f7; padding: 7px; }
+.mobile #open-settings { display: inline-flex; }
+.mobile .header-actions { gap: 0; }
+.mobile .header-actions .quiet { padding: 8px; font-size: 12px; }
+.mobile #connection-state { display: none; }
 .mobile .messages { padding: 18px 14px; }
 .mobile .message { max-width: 88%; font-size: 15px; }
 .mobile #composer { position: sticky; bottom: 0; padding: 10px 12px calc(10px + env(safe-area-inset-bottom)); background: #111318; }

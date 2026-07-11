@@ -66,6 +66,81 @@ func TestWebSocket_RejectsUnknownDevice(t *testing.T) {
 	assertType(t, conn, protocol.TypeError)
 }
 
+func TestWebSocket_StreamFanoutToTwoSubscribers(t *testing.T) {
+	e := New(Config{
+		AgentVersion:      "test",
+		ClaudeVersion:     "fake",
+		ClaudeBin:         "../../testdata/fake-claude.sh",
+		DefaultWorkingDir: ".",
+		DefaultPermission: "bypassPermissions",
+		DeviceTokens:      map[string]string{"owner": "Mac", "guest": "Android"},
+	})
+	ts := httptest.NewServer(e.Handler())
+	defer ts.Close()
+	wsURL := "ws" + ts.URL[len("http"):] + "/ws"
+
+	owner, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer owner.Close()
+	writeJSON(t, owner, protocol.AuthMsg{Type: protocol.TypeAuth, DeviceToken: "owner", DeviceName: "Mac"})
+	assertType(t, owner, protocol.TypeHello)
+	writeJSON(t, owner, protocol.ControlMsg{Type: protocol.TypeControl, Action: protocol.ActionCreateSession, Name: "shared"})
+	created := readSessionCreated(t, owner)
+
+	guest, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer guest.Close()
+	writeJSON(t, guest, protocol.AuthMsg{Type: protocol.TypeAuth, DeviceToken: "guest", DeviceName: "Android"})
+	assertType(t, guest, protocol.TypeHello)
+	writeJSON(t, guest, protocol.ControlMsg{Type: protocol.TypeControl, Action: protocol.ActionJoinSession, SessionID: created.SessionID})
+	writeJSON(t, guest, protocol.ControlMsg{Type: protocol.TypeControl, Action: protocol.ActionListSessions, Limit: 10})
+	assertType(t, guest, protocol.TypeSessionList)
+
+	writeJSON(t, owner, protocol.TextMsg{Type: protocol.TypeText, Content: "fanout"})
+	want := []string{protocol.TypeThinking, protocol.TypeToken, protocol.TypeToken, protocol.TypeDone}
+	for _, typ := range want {
+		assertType(t, owner, typ)
+		assertType(t, guest, typ)
+	}
+}
+
+func TestRemoveClientDoesNotRemoveReplacementConnection(t *testing.T) {
+	e := New(Config{})
+	oldClient := &client{deviceID: "same-device", mu: make(chan struct{}, 1)}
+	newClient := &client{deviceID: "same-device", mu: make(chan struct{}, 1)}
+	e.addClient(oldClient)
+	e.addClient(newClient)
+
+	e.removeClient(oldClient)
+
+	e.mu.RLock()
+	got := e.clients["same-device"]
+	e.mu.RUnlock()
+	if got != newClient {
+		t.Fatalf("replacement connection was removed: got %p want %p", got, newClient)
+	}
+}
+
+func readSessionCreated(t *testing.T, conn *websocket.Conn) protocol.SessionCreatedMsg {
+	t.Helper()
+	_, payload, err := conn.ReadMessage()
+	if err != nil {
+		t.Fatalf("read: %v", err)
+	}
+	var msg protocol.SessionCreatedMsg
+	if err := json.Unmarshal(payload, &msg); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if msg.Type != protocol.TypeSessionCreated || msg.SessionID == "" {
+		t.Fatalf("unexpected message: %s", payload)
+	}
+	return msg
+}
+
 func TestHandleControl_LeaveSession(t *testing.T) {
 	e := New(Config{})
 	e.manager = session.NewManager(session.ManagerConfig{

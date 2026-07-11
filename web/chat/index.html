@@ -18,7 +18,13 @@
       <button id="show-admin" class="quiet">管理与诊断</button>
     </aside>
     <main class="workspace">
-      <header><button id="new-session-mobile" class="quiet">＋</button><strong id="view-title">新会话</strong><select id="mobile-session-select" aria-label="切换会话"><option value="">会话</option></select><span id="connection-state">连接中</span></header>
+      <header>
+        <button id="new-session-mobile" class="quiet">＋</button>
+        <strong id="view-title">新会话</strong>
+        <select id="mobile-session-select" aria-label="切换会话"><option value="">会话</option></select>
+        <span id="connection-state">连接中</span>
+        <div class="header-actions"><button id="stop-session" class="quiet" disabled>停止</button><button id="open-settings" class="quiet">设置</button></div>
+      </header>
       <section id="chat-view" class="chat-view">
         <div id="messages" class="messages"><p class="empty">从 Mac 或手机开始一段会话。</p></div>
         <form id="composer"><textarea id="prompt" rows="3" placeholder="输入消息…"></textarea><button class="primary">发送</button></form>

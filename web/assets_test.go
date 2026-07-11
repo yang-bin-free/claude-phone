@@ -21,6 +21,7 @@ func TestSharedChatAssetsSupportMobileRemoteConnection(t *testing.T) {
 	for _, marker := range []string{
 		"params.get(\"ws\")", "params.get(\"deviceToken\")", "params.get(\"platform\")",
 		"case \"session_list\"", "assistantChunk", "action: \"select_session\"",
+		"action: \"stop_session\"", "AndroidBridge.openSettings",
 	} {
 		if !strings.Contains(string(js), marker) {
 			t.Fatalf("chat.js missing %q", marker)
