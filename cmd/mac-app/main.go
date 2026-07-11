@@ -47,8 +47,19 @@ func main() {
 	defer stop()
 	defer e.Close()
 
-	log.Printf("Claude Phone desktop service listening on http://%s", listener.Addr())
-	if err := desktop.Serve(ctx, listener, handler); err != nil {
+	baseURL := "http://" + listener.Addr().String() + "/"
+	pageURL, err := desktop.URLWithAdminToken(baseURL, token)
+	if err != nil {
+		log.Fatal(err)
+	}
+	serverDone := make(chan error, 1)
+	go func() { serverDone <- desktop.Serve(ctx, listener, handler) }()
+	log.Printf("Claude Phone desktop service listening on %s", baseURL)
+	if err := desktop.RunNative(ctx, pageURL, desktop.Commands{Quit: stop}); err != nil {
+		stop()
+		log.Print(err)
+	}
+	if err := <-serverDone; err != nil {
 		log.Fatal(err)
 	}
 }
