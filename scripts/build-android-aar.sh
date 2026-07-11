@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-cd "$(dirname "$0")/.."
+script_dir="$(cd "$(dirname "$0")" && pwd)"
+repo_root="$(cd "${script_dir}/.." && pwd)"
+cd "${repo_root}"
 
 if [[ -z "${ANDROID_HOME:-}" && -f android/local.properties ]]; then
   sdk_dir="$(awk -F '=' '/^sdk.dir=/ {print $2; exit}' android/local.properties)"
@@ -86,4 +88,4 @@ gomobile bind \
   "${module_path}/pkg/androidlib" \
   "${module_path}/pkg/androidlib/tailscale"
 
-"$(dirname "$0")/test-android-aar.sh" build/claudelib.aar
+"${script_dir}/test-android-aar.sh" build/claudelib.aar
