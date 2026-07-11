@@ -1,5 +1,5 @@
 (() => {
-  const state = { ws: null, sessionId: "", retry: 0 };
+  const state = { ws: null, sessionId: "", retry: 0, assistantChunk: null, sessions: [] };
   const messages = document.querySelector("#messages");
   const connection = document.querySelector("#connection-state");
   const params = new URLSearchParams(location.search);
@@ -25,6 +25,29 @@
     if (state.ws?.readyState === WebSocket.OPEN) state.ws.send(JSON.stringify(value));
   }
 
+  function selectSession(sessionId, name) {
+    state.sessionId = sessionId;
+    state.assistantChunk = null;
+    document.querySelector("#view-title").textContent = name || "会话";
+    send({ type: "control", action: "select_session", sessionId });
+    renderSessions();
+  }
+
+  function renderSessions() {
+    const list = document.querySelector("#session-list");
+    list.replaceChildren();
+    const select = document.querySelector("#mobile-session-select");
+    select.replaceChildren(new Option("会话", ""));
+    state.sessions.forEach(session => {
+      const button = document.createElement("button");
+      button.className = `session-item${session.sessionId === state.sessionId ? " active" : ""}`;
+      button.textContent = session.name || session.sessionId;
+      button.addEventListener("click", () => selectSession(session.sessionId, session.name));
+      list.append(button);
+      select.add(new Option(session.name || session.sessionId, session.sessionId, false, session.sessionId === state.sessionId));
+    });
+  }
+
   function connect() {
     const scheme = location.protocol === "https:" ? "wss" : "ws";
     const endpoint = configuredWS || `${scheme}://${location.host}/ws`;
@@ -44,21 +67,56 @@
     };
     ws.onmessage = event => {
       const msg = JSON.parse(event.data);
-      if (msg.type === "session_created") state.sessionId = msg.sessionId;
-      if (msg.type === "token") append("assistant", msg.content);
-      if (msg.type === "error") append("error", `${msg.code}: ${msg.message}`);
+      switch (msg.type) {
+        case "hello":
+          send({ type: "control", action: "list_sessions", limit: 100 });
+          break;
+        case "session_list":
+          state.sessions = msg.sessions || [];
+          renderSessions();
+          break;
+        case "session_created":
+          state.sessionId = msg.sessionId;
+          state.assistantChunk = null;
+          document.querySelector("#view-title").textContent = msg.name || "新会话";
+          send({ type: "control", action: "list_sessions", limit: 100 });
+          break;
+        case "thinking":
+          state.assistantChunk = null;
+          break;
+        case "token":
+          if (!state.assistantChunk) state.assistantChunk = append("assistant", "");
+          state.assistantChunk.textContent += msg.content;
+          messages.scrollTop = messages.scrollHeight;
+          break;
+        case "done":
+          state.assistantChunk = null;
+          break;
+        case "session_stopped":
+          if (state.sessionId === msg.sessionId) state.sessionId = "";
+          send({ type: "control", action: "list_sessions", limit: 100 });
+          break;
+        case "error":
+          append("error", `${msg.code}: ${msg.message}`);
+          break;
+      }
     };
   }
 
   const createSession = () => send({ type: "control", action: "create_session", name: platform === "mobile" ? "Android 会话" : "Mac 会话" });
   document.querySelector("#new-session").addEventListener("click", createSession);
   document.querySelector("#new-session-mobile").addEventListener("click", createSession);
+  document.querySelector("#mobile-session-select").addEventListener("change", event => {
+    const session = state.sessions.find(item => item.sessionId === event.target.value);
+    if (session) selectSession(session.sessionId, session.name);
+  });
   document.querySelector("#composer").addEventListener("submit", event => {
     event.preventDefault();
     const input = document.querySelector("#prompt");
     const content = input.value.trim();
     if (!content) return;
     append("user", content);
+    state.assistantChunk = null;
     send({ type: "text", content });
     input.value = "";
   });

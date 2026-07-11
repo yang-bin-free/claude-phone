@@ -18,7 +18,10 @@ func TestSharedChatAssetsSupportMobileRemoteConnection(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, marker := range []string{"params.get(\"ws\")", "params.get(\"deviceToken\")", "params.get(\"platform\")"} {
+	for _, marker := range []string{
+		"params.get(\"ws\")", "params.get(\"deviceToken\")", "params.get(\"platform\")",
+		"case \"session_list\"", "assistantChunk", "action: \"select_session\"",
+	} {
 		if !strings.Contains(string(js), marker) {
 			t.Fatalf("chat.js missing %q", marker)
 		}

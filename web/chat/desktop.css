@@ -2,9 +2,12 @@
 .sidebar { background: #171a21; border-right: 1px solid #2a2e39; padding: 18px 14px; display: flex; flex-direction: column; gap: 14px; }
 .brand { font-weight: 650; padding: 8px 4px 14px; }
 #session-list { flex: 1; }
+.session-item { width: 100%; text-align: left; color: #aeb5c5; background: transparent; padding: 10px; margin-bottom: 4px; }
+.session-item:hover, .session-item.active { color: white; background: #252a35; }
 .workspace { display: grid; grid-template-rows: 58px minmax(0, 1fr); }
 header { border-bottom: 1px solid #2a2e39; display: flex; align-items: center; justify-content: space-between; padding: 0 22px; }
 #new-session-mobile { display: none; }
+#mobile-session-select { display: none; }
 #connection-state { color: #929bad; font-size: 13px; }
 .chat-view { min-height: 0; display: grid; grid-template-rows: minmax(0, 1fr) auto; }
 .messages { overflow: auto; padding: 28px max(28px, calc((100% - 820px) / 2)); }

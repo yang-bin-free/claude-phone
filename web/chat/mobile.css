@@ -4,6 +4,7 @@ body.mobile { background: #111318; }
 .mobile .workspace { min-height: 100vh; grid-template-rows: 52px minmax(0, 1fr); }
 .mobile header { padding: env(safe-area-inset-top) 14px 0; }
 .mobile #new-session-mobile { display: inline-flex; width: 38px; height: 38px; align-items: center; justify-content: center; font-size: 22px; }
+.mobile #mobile-session-select { display: block; max-width: 120px; border: 0; border-radius: 8px; background: #20242d; color: #edf0f7; padding: 7px; }
 .mobile .messages { padding: 18px 14px; }
 .mobile .message { max-width: 88%; font-size: 15px; }
 .mobile #composer { position: sticky; bottom: 0; padding: 10px 12px calc(10px + env(safe-area-inset-bottom)); background: #111318; }
@@ -15,4 +16,5 @@ body.mobile { background: #111318; }
   .app-shell { display: block; }
   .sidebar { display: none; }
   #new-session-mobile { display: inline-flex; }
+  #mobile-session-select { display: block; }
 }
