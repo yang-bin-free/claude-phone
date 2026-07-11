@@ -20,6 +20,7 @@ type Config struct {
 	WriteTimeout         time.Duration
 	DeviceTokens         map[string]string
 	DataDir              string
+	ConfigPollInterval   time.Duration
 }
 
 func (c Config) withDefaults() Config {

@@ -34,6 +34,16 @@ type Manager struct {
 	byID map[string]*Session
 }
 
+// SetMaxConcurrent updates the active-session limit for future creates.
+func (m *Manager) SetMaxConcurrent(limit int) {
+	if limit <= 0 {
+		return
+	}
+	m.mu.Lock()
+	m.cfg.MaxConcurrent = limit
+	m.mu.Unlock()
+}
+
 // NewManager 按配置创建会话管理器。
 func NewManager(cfg ManagerConfig) *Manager {
 	if cfg.MaxConcurrent <= 0 {

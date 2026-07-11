@@ -260,13 +260,14 @@ func (e *Engine) stopSession(s *session.Session) error {
 }
 
 func (e *Engine) createSession(cl *client, msg protocol.ControlMsg) (string, error) {
+	runtime := e.runtimeConfig()
 	cwd := msg.WorkingDir
 	if cwd == "" {
-		cwd = e.cfg.DefaultWorkingDir
+		cwd = runtime.DefaultWorkingDir
 	}
 	permission := msg.PermissionMode
 	if permission == "" {
-		permission = e.cfg.DefaultPermission
+		permission = runtime.DefaultPermission
 	}
 	name := msg.Name
 	if name == "" {

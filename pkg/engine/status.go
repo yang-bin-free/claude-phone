@@ -28,6 +28,7 @@ type SessionSnapshot struct {
 
 // Status returns a snapshot of the current engine state.
 func (e *Engine) Status() StatusReport {
+	runtime := e.runtimeConfig()
 	e.mu.RLock()
 	connected := make([]string, 0, len(e.clients))
 	for token := range e.clients {
@@ -65,9 +66,9 @@ func (e *Engine) Status() StatusReport {
 		AgentVersion:         e.cfg.AgentVersion,
 		ClaudeVersion:        e.cfg.ClaudeVersion,
 		ClaudeBin:            e.cfg.ClaudeBin,
-		DefaultWorkingDir:    e.cfg.DefaultWorkingDir,
-		DefaultPermission:    e.cfg.DefaultPermission,
-		MaxConcurrentSession: e.cfg.MaxConcurrentSession,
+		DefaultWorkingDir:    runtime.DefaultWorkingDir,
+		DefaultPermission:    runtime.DefaultPermission,
+		MaxConcurrentSession: runtime.MaxConcurrentSessions,
 		ConnectedDevices:     connected,
 		Sessions:             snaps,
 	}

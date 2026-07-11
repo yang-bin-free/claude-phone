@@ -34,6 +34,10 @@ type Engine struct {
 	devices   *deviceStore
 	history   *historyStore
 	startedAt time.Time
+	configMu  sync.RWMutex
+	runtime   runtimeConfig
+	stopWatch chan struct{}
+	closeOnce sync.Once
 }
 
 func New(cfg Config) *Engine {
@@ -47,6 +51,8 @@ func New(cfg Config) *Engine {
 		devices:   newDeviceStore(cfg.DataDir),
 		history:   newHistoryStore(cfg.DataDir),
 		startedAt: time.Now(),
+		runtime:   runtimeConfig{DefaultWorkingDir: cfg.DefaultWorkingDir, DefaultPermission: cfg.DefaultPermission, MaxConcurrentSessions: cfg.MaxConcurrentSession},
+		stopWatch: make(chan struct{}),
 	}
 	e.factory = func(c session.ClaudeConfig) claudeProc { return session.NewClaudeProc(c) }
 	if persisted, err := e.history.Restore(); err == nil {
@@ -56,6 +62,8 @@ func New(cfg Config) *Engine {
 			e.manager.Restore(sess)
 		}
 	}
+	_ = e.reloadRuntimeConfig()
+	go e.watchRuntimeConfig()
 	return e
 }
 
@@ -102,6 +110,7 @@ func (e *Engine) Serve(ln net.Listener) error {
 }
 
 func (e *Engine) Close() error {
+	e.closeOnce.Do(func() { close(e.stopWatch) })
 	e.mu.Lock()
 	for _, proc := range e.procs {
 		_ = proc.Stop()
