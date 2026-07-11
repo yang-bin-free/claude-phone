@@ -69,14 +69,12 @@ func (e *Engine) HandleWS(w http.ResponseWriter, r *http.Request) {
 		}
 		switch env.Type {
 		case protocol.TypeControl:
-			id, err := e.handleControl(cl, env.Raw)
+			id, err := e.handleControl(cl, currentSession, env.Raw)
 			if err != nil {
 				_ = cl.writeJSON(errorFor(err))
 				continue
 			}
-			if id != "" {
-				currentSession = id
-			}
+			currentSession = id
 		case protocol.TypeText, protocol.TypeVoice:
 			if err := e.handleText(currentSession, env.Raw); err != nil {
 				_ = cl.writeJSON(errorFor(err))
@@ -138,10 +136,10 @@ func (e *Engine) send(deviceID string, payload []byte) {
 	}
 }
 
-func (e *Engine) handleControl(cl *client, raw []byte) (string, error) {
+func (e *Engine) handleControl(cl *client, currentSession string, raw []byte) (string, error) {
 	var msg protocol.ControlMsg
 	if err := json.Unmarshal(raw, &msg); err != nil {
-		return "", err
+		return currentSession, err
 	}
 	switch msg.Action {
 	case protocol.ActionCreateSession:
@@ -149,15 +147,69 @@ func (e *Engine) handleControl(cl *client, raw []byte) (string, error) {
 	case protocol.ActionSelectSession, protocol.ActionJoinSession:
 		s, ok := e.manager.Get(msg.SessionID)
 		if !ok {
-			return "", session.ErrSessionNotFound
+			return currentSession, session.ErrSessionNotFound
 		}
 		s.Subscribe(cl.deviceID)
 		return s.ID, nil
+	case protocol.ActionLeaveSession:
+		s, ok := e.manager.Get(msg.SessionID)
+		if !ok {
+			return currentSession, session.ErrSessionNotFound
+		}
+		if s.Owner == cl.deviceID {
+			return currentSession, session.ErrSessionNotOwner
+		}
+		s.Unsubscribe(cl.deviceID)
+		if currentSession == s.ID {
+			return "", nil
+		}
+		return currentSession, nil
+	case protocol.ActionStopSession:
+		s, ok := e.manager.Get(msg.SessionID)
+		if !ok {
+			return currentSession, session.ErrSessionNotFound
+		}
+		if s.Owner != cl.deviceID {
+			return currentSession, session.ErrSessionNotOwner
+		}
+		if err := e.stopSession(s); err != nil {
+			return currentSession, err
+		}
+		if currentSession == s.ID {
+			return "", nil
+		}
+		return currentSession, nil
 	case protocol.ActionListSessions:
-		return "", cl.writeJSON(e.sessionList())
+		limit := msg.Limit
+		if limit <= 0 {
+			limit = len(e.manager.List())
+		}
+		return currentSession, cl.writeJSON(e.sessionList(limit, msg.Offset))
 	default:
-		return "", nil
+		return currentSession, nil
 	}
+}
+
+func (e *Engine) stopSession(s *session.Session) error {
+	e.mu.RLock()
+	proc := e.procs[s.ID]
+	e.mu.RUnlock()
+	if proc != nil {
+		if err := proc.Stop(); err != nil {
+			return err
+		}
+	}
+	s.SetStatus("stopped")
+	b, err := json.Marshal(protocol.SessionStoppedMsg{Type: protocol.TypeSessionStopped, SessionID: s.ID})
+	if err != nil {
+		return err
+	}
+	s.Broadcast(b)
+	e.mu.Lock()
+	delete(e.procs, s.ID)
+	e.mu.Unlock()
+	e.manager.Remove(s.ID)
+	return nil
 }
 
 func (e *Engine) createSession(cl *client, msg protocol.ControlMsg) (string, error) {
@@ -223,8 +275,19 @@ func (e *Engine) handleText(sessionID string, raw []byte) error {
 	return proc.Send(msg.Content)
 }
 
-func (e *Engine) sessionList() protocol.SessionListMsg {
+func (e *Engine) sessionList(limit, offset int) protocol.SessionListMsg {
 	sessions := e.manager.List()
+	if offset < 0 {
+		offset = 0
+	}
+	if offset > len(sessions) {
+		offset = len(sessions)
+	}
+	end := len(sessions)
+	if limit > 0 && offset+limit < end {
+		end = offset + limit
+	}
+	sessions = sessions[offset:end]
 	infos := make([]protocol.SessionInfo, 0, len(sessions))
 	for _, s := range sessions {
 		infos = append(infos, protocol.SessionInfo{
@@ -245,6 +308,8 @@ func errorFor(err error) protocol.ErrorMsg {
 		return protocol.NewError(protocol.CodeSessionLimitReached, err.Error())
 	case errors.Is(err, session.ErrSessionNotFound):
 		return protocol.NewError(protocol.CodeSessionNotFound, err.Error())
+	case errors.Is(err, session.ErrSessionNotOwner):
+		return protocol.NewError(protocol.CodeSessionNotOwner, err.Error())
 	default:
 		return protocol.NewError("ENGINE_ERROR", err.Error())
 	}

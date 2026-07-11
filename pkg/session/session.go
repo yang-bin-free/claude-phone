@@ -43,6 +43,9 @@ func (s *Session) SetSender(fn SenderFunc) {
 func (s *Session) Subscribe(deviceID string) {
 	s.mu.Lock()
 	s.subs[deviceID] = struct{}{}
+	if s.Status != "stopped" {
+		s.Status = "active"
+	}
 	s.mu.Unlock()
 }
 
@@ -50,6 +53,16 @@ func (s *Session) Subscribe(deviceID string) {
 func (s *Session) Unsubscribe(deviceID string) {
 	s.mu.Lock()
 	delete(s.subs, deviceID)
+	if len(s.subs) == 0 && s.Status != "stopped" {
+		s.Status = "dormant"
+	}
+	s.mu.Unlock()
+}
+
+// SetStatus 更新会话状态。
+func (s *Session) SetStatus(status string) {
+	s.mu.Lock()
+	s.Status = status
 	s.mu.Unlock()
 }
 

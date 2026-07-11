@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
+	"sort"
 	"sync"
 	"time"
 )
@@ -14,6 +15,9 @@ var (
 
 	// ErrSessionNotFound 表示会话不存在（对应 SESSION_NOT_FOUND）。
 	ErrSessionNotFound = errors.New("session not found")
+
+	// ErrSessionNotOwner 表示当前设备不是会话 owner（对应 SESSION_NOT_OWNER）。
+	ErrSessionNotOwner = errors.New("session not owner")
 )
 
 // ManagerConfig 配置会话管理器。
@@ -87,5 +91,11 @@ func (m *Manager) List() []*Session {
 	for _, s := range m.byID {
 		out = append(out, s)
 	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].CreatedAt == out[j].CreatedAt {
+			return out[i].ID < out[j].ID
+		}
+		return out[i].CreatedAt < out[j].CreatedAt
+	})
 	return out
 }

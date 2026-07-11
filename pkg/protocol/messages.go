@@ -133,6 +133,11 @@ type SessionCreatedMsg struct {
 	Cwd       string `json:"cwd"`
 }
 
+type SessionStoppedMsg struct {
+	Type      string `json:"type"`
+	SessionID string `json:"sessionId"`
+}
+
 type TokenMsg struct {
 	Type    string `json:"type"`
 	Content string `json:"content"`
