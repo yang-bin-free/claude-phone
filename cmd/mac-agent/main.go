@@ -33,23 +33,65 @@ func main() {
 }
 
 func runServe(args []string) {
-	fs := flag.NewFlagSet("claude-phone-agent", flag.ExitOnError)
+	cfg, network, err := parseServeConfig(args)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	e := engine.New(cfg)
+	if network.Enabled() {
+		log.Printf("claude-phone-agent joining tailnet as %s and listening on %s", network.Hostname, cfg.Addr)
+		if err := e.ServeTSNet(engine.TSNetConfig{
+			Hostname:   network.Hostname,
+			Dir:        network.Dir,
+			AuthKey:    network.AuthKey,
+			ControlURL: network.ControlURL,
+		}, cfg.Addr); err != nil {
+			log.Fatal(err)
+		}
+		return
+	}
+
+	log.Printf("claude-phone-agent listening locally on %s", cfg.Addr)
+	if err := e.ListenAndServe(); err != nil {
+		log.Fatal(err)
+	}
+}
+
+type tsnetOptions struct {
+	Dir        string
+	Hostname   string
+	AuthKey    string
+	ControlURL string
+}
+
+func (o tsnetOptions) Enabled() bool { return o.Dir != "" }
+
+func parseServeConfig(args []string) (engine.Config, tsnetOptions, error) {
+	fs := flag.NewFlagSet("claude-phone-agent", flag.ContinueOnError)
 	addr := fs.String("addr", engine.DefaultAddr, "HTTP/WebSocket listen address")
 	claudeBin := fs.String("claude-bin", "claude", "Claude CLI binary")
 	workdir := fs.String("workdir", ".", "default Claude working directory")
 	permission := fs.String("permission", "default", "default Claude permission mode")
-	_ = fs.Parse(args)
-
-	e := engine.New(engine.Config{
-		Addr:              *addr,
-		ClaudeBin:         *claudeBin,
-		DefaultWorkingDir: *workdir,
-		DefaultPermission: *permission,
-	})
-	log.Printf("claude-phone-agent listening on %s", *addr)
-	if err := e.ListenAndServe(); err != nil {
-		log.Fatal(err)
+	tsnetDir := fs.String("tsnet-dir", "", "persistent tsnet state directory (enables tailnet listener)")
+	tsnetHostname := fs.String("tsnet-hostname", "claude-mac", "tailnet hostname")
+	tsnetAuthKey := fs.String("tsnet-auth-key", os.Getenv("TS_AUTHKEY"), "Tailscale auth key (or TS_AUTHKEY)")
+	tsnetControlURL := fs.String("tsnet-control-url", "", "optional Tailscale-compatible control server URL")
+	if err := fs.Parse(args); err != nil {
+		return engine.Config{}, tsnetOptions{}, err
 	}
+
+	return engine.Config{
+			Addr:              *addr,
+			ClaudeBin:         *claudeBin,
+			DefaultWorkingDir: *workdir,
+			DefaultPermission: *permission,
+		}, tsnetOptions{
+			Dir:        *tsnetDir,
+			Hostname:   *tsnetHostname,
+			AuthKey:    *tsnetAuthKey,
+			ControlURL: *tsnetControlURL,
+		}, nil
 }
 
 func runStatus(args []string) {

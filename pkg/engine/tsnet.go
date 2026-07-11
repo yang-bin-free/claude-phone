@@ -6,8 +6,21 @@ import (
 	"tailscale.com/tsnet"
 )
 
-func (e *Engine) ServeTSNet(hostname, dir, addr string) error {
-	s := &tsnet.Server{Hostname: hostname, Dir: dir}
+type TSNetConfig struct {
+	Hostname   string
+	Dir        string
+	AuthKey    string
+	ControlURL string
+}
+
+func (e *Engine) ServeTSNet(cfg TSNetConfig, addr string) error {
+	s := &tsnet.Server{
+		Hostname:   cfg.Hostname,
+		Dir:        cfg.Dir,
+		AuthKey:    cfg.AuthKey,
+		ControlURL: cfg.ControlURL,
+	}
+	defer s.Close()
 	ln, err := s.Listen("tcp", addr)
 	if err != nil {
 		return err

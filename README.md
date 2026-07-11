@@ -172,6 +172,22 @@ gomobile 兼容绕过：当前 x/mobile 的 `gomobile bind` 会在临时 ABI 目
 / `go test` 不受影响。等 x/mobile 修复或项目改用 patched gomobile 后可以删除
 这段绕过。
 
+### Mac Agent 网络模式
+
+默认只监听本机回环地址。P0c 跨网络联调时，通过持久化状态目录启用内嵌
+tsnet；Auth Key 建议只通过环境变量传入，避免进入 shell 历史和仓库：
+
+```bash
+TS_AUTHKEY=tskey-auth-... claude-phone-agent serve \
+  --addr :9876 \
+  --tsnet-dir "$HOME/Library/Application Support/ClaudePhone/tsnet" \
+  --tsnet-hostname claude-mac
+```
+
+使用 Headscale 等兼容控制服务器时，再传
+`--tsnet-control-url https://headscale.example.com`。首次注册成功后，状态会保存在
+`--tsnet-dir`，后续启动无需再次提供 Auth Key。
+
 ### 依赖与许可证
 
 | 依赖 | 用途 | 许可证 |
