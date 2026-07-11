@@ -21,6 +21,8 @@ jobs:
       - run: go build ./cmd/mac-agent ./cmd/mac-app
       - run: ./scripts/build-mac-app.sh
       - run: node --check web/chat/chat.js && node --check web/admin/admin.js
+      - name: Validate iOS source project
+        run: make ios-validate
       - name: Check secrets and licenses
         shell: bash
         run: |
