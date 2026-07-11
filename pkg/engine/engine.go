@@ -34,6 +34,7 @@ type Engine struct {
 	devices     *deviceStore
 	history     *historyStore
 	permissions *permissionStore
+	templates   *templateStore
 	startedAt   time.Time
 	configMu    sync.RWMutex
 	runtime     runtimeConfig
@@ -55,6 +56,7 @@ func New(cfg Config) *Engine {
 		devices:     newDeviceStore(cfg.DataDir),
 		history:     newHistoryStore(cfg.DataDir),
 		permissions: newPermissionStore(cfg.DataDir),
+		templates:   newTemplateStore(cfg.DataDir),
 		startedAt:   time.Now(),
 		runtime:     runtimeConfig{DefaultWorkingDir: cfg.DefaultWorkingDir, DefaultPermission: cfg.DefaultPermission, MaxConcurrentSessions: cfg.MaxConcurrentSession},
 		stopWatch:   make(chan struct{}),

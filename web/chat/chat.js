@@ -1,5 +1,5 @@
 (() => {
-  const state = { ws: null, sessionId: "", retry: 0, assistantChunk: null, sessions: [] };
+  const state = { ws: null, sessionId: "", retry: 0, assistantChunk: null, sessions: [], projects: [], templates: [] };
   const messages = document.querySelector("#messages");
   const connection = document.querySelector("#connection-state");
   const params = new URLSearchParams(location.search);
@@ -94,6 +94,8 @@
       switch (msg.type) {
         case "hello":
           send({ type: "control", action: "list_sessions", limit: 100 });
+          send({ type: "control", action: "list_projects" });
+          send({ type: "control", action: "list_templates" });
           break;
         case "session_list":
           state.sessions = msg.sessions || [];
@@ -106,6 +108,25 @@
           document.querySelector("#stop-session").disabled = false;
           send({ type: "control", action: "list_sessions", limit: 100 });
           break;
+        case "project_list": {
+          state.projects = msg.projects || [];
+          const select = document.querySelector("#create-project");
+          select.replaceChildren(new Option("默认目录", ""));
+          state.projects.forEach(project => select.add(new Option(project.name, project.path)));
+          break;
+        }
+        case "template_list": {
+          state.templates = msg.templates || [];
+          const container = document.querySelector("#prompt-templates");
+          container.replaceChildren();
+          state.templates.forEach(template => {
+            const button = document.createElement("button");
+            button.type = "button"; button.className = "quiet"; button.textContent = template.label;
+            button.addEventListener("click", () => window.claudePhone.setPrompt(template.prompt));
+            container.append(button);
+          });
+          break;
+        }
         case "history":
           if (msg.sessionId === state.sessionId) renderHistory(msg.messages);
           break;
@@ -140,7 +161,7 @@
     };
   }
 
-  const createSession = () => send({ type: "control", action: "create_session", name: platform === "mobile" ? "Android 会话" : "Mac 会话" });
+  const createSession = () => send({ type: "control", action: "create_session", name: platform === "mobile" ? "Android 会话" : "Mac 会话", workingDir: document.querySelector("#create-project").value, permissionMode: document.querySelector("#create-permission").value });
   document.querySelector("#new-session").addEventListener("click", createSession);
   document.querySelector("#new-session-mobile").addEventListener("click", createSession);
   document.querySelector("#mobile-session-select").addEventListener("change", event => {

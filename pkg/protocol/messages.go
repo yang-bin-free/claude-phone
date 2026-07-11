@@ -20,6 +20,7 @@ const (
 
 	TypeHello           = "hello"
 	TypeProjectList     = "project_list"
+	TypeTemplateList    = "template_list"
 	TypeSessionList     = "session_list"
 	TypeSessionCreated  = "session_created"
 	TypeSessionSelected = "session_selected"
@@ -44,6 +45,7 @@ const (
 	ActionStopSession   = "stop_session"
 	ActionListSessions  = "list_sessions"
 	ActionListProjects  = "list_projects"
+	ActionListTemplates = "list_templates"
 	ActionCancel        = "cancel"
 	ActionLoadHistory   = "load_history"
 	ActionPing          = "ping"
@@ -136,6 +138,16 @@ type ProjectInfo struct {
 type ProjectListMsg struct {
 	Type     string        `json:"type"`
 	Projects []ProjectInfo `json:"projects"`
+}
+
+type TemplateInfo struct {
+	Label  string `json:"label"`
+	Prompt string `json:"prompt"`
+}
+
+type TemplateListMsg struct {
+	Type      string         `json:"type"`
+	Templates []TemplateInfo `json:"templates"`
 }
 
 type SessionCreatedMsg struct {

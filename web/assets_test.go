@@ -29,6 +29,7 @@ func TestSharedChatAssetsSupportMobileRemoteConnection(t *testing.T) {
 		"action: \"stop_session\"", "AndroidBridge.openSettings",
 		"action: \"load_history\"", "case \"history\"",
 		"case \"health\"", "会话可能卡住",
+		"action: \"list_templates\"", "case \"template_list\"",
 		"/admin/devices/", "revokeDevice",
 		"/admin/projects", "deleteProject",
 		"/admin/permission-rules", "deletePermissionRule",

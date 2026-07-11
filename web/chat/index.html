@@ -23,10 +23,11 @@
         <strong id="view-title">新会话</strong>
         <select id="mobile-session-select" aria-label="切换会话"><option value="">会话</option></select>
         <span id="connection-state">连接中</span>
-        <div class="header-actions"><button id="stop-session" class="quiet" disabled>停止</button><button id="open-settings" class="quiet">设置</button></div>
+        <div class="header-actions"><select id="create-project" aria-label="新会话项目"><option value="">默认目录</option></select><select id="create-permission" aria-label="权限模式"><option value="default">严格</option><option value="acceptEdits">审阅</option><option value="bypassPermissions">信任</option></select><button id="stop-session" class="quiet" disabled>停止</button><button id="open-settings" class="quiet">设置</button></div>
       </header>
       <section id="chat-view" class="chat-view">
         <div id="messages" class="messages"><p class="empty">从 Mac 或手机开始一段会话。</p></div>
+        <div id="prompt-templates" aria-label="提示词模板"></div>
         <form id="composer"><textarea id="prompt" rows="3" placeholder="输入消息…"></textarea><button id="voice-mobile" type="button" class="quiet" aria-label="语音输入">🎙</button><button class="primary">发送</button></form>
       </section>
       <section id="admin-view" class="admin-view" hidden>

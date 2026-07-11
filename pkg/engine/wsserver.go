@@ -203,6 +203,12 @@ func (e *Engine) handleControl(cl *client, currentSession string, raw []byte) (s
 			items = append(items, protocol.ProjectInfo{Name: project.Name, Path: project.Path, Permission: project.Permission})
 		}
 		return currentSession, cl.writeJSON(protocol.ProjectListMsg{Type: protocol.TypeProjectList, Projects: items})
+	case protocol.ActionListTemplates:
+		templates, err := e.templates.List()
+		if err != nil {
+			return currentSession, err
+		}
+		return currentSession, cl.writeJSON(protocol.TemplateListMsg{Type: protocol.TypeTemplateList, Templates: templates})
 	case protocol.ActionLoadHistory:
 		sessionID := msg.SessionID
 		if sessionID == "" {
@@ -271,6 +277,24 @@ func (e *Engine) createSession(cl *client, msg protocol.ControlMsg) (string, err
 	cwd := msg.WorkingDir
 	if cwd == "" {
 		cwd = runtime.DefaultWorkingDir
+	} else if cwd != runtime.DefaultWorkingDir {
+		projects, err := e.projects.List()
+		if err != nil {
+			return "", err
+		}
+		allowed := false
+		for _, project := range projects {
+			if project.Path == cwd {
+				allowed = true
+				if msg.PermissionMode == "" && project.Permission != "" {
+					msg.PermissionMode = project.Permission
+				}
+				break
+			}
+		}
+		if !allowed {
+			return "", errors.New("working directory is not an authorized project")
+		}
 	}
 	permission := msg.PermissionMode
 	if permission == "" {
