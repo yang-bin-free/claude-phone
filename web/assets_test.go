@@ -32,6 +32,7 @@ func TestSharedChatAssetsSupportMobileRemoteConnection(t *testing.T) {
 		"action: \"list_templates\"", "case \"template_list\"",
 		"requestAnimationFrame(flushTokens)", "messages.children.length > 500",
 		"case \"queued\"", "已排队",
+		"case \"tool_use\"", "msg.tool",
 		"/admin/devices/", "revokeDevice",
 		"/admin/projects", "deleteProject",
 		"/admin/permission-rules", "deletePermissionRule",

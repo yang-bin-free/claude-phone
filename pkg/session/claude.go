@@ -60,6 +60,7 @@ func (p *ClaudeProc) buildArgs() []string {
 	args = append(args,
 		"--input-format", "stream-json",
 		"--output-format", "stream-json",
+		"--include-partial-messages",
 		"--permission-mode", p.cfg.Permission,
 		"--replay-user-messages",
 	)

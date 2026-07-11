@@ -14,14 +14,20 @@ type queuedPrompt struct {
 
 func (e *Engine) handleProcOutput(sess *session.Session, proc claudeProc, payload []byte) {
 	e.recordActivity(sess.ID)
-	_ = e.history.Append(sess.ID, payload)
-	sess.Broadcast(payload)
-	var head struct {
-		Type string `json:"type"`
+	translated := translateClaudeOutput(payload)
+	for _, message := range translated {
+		_ = e.history.Append(sess.ID, message)
+		sess.Broadcast(message)
+		var head struct {
+			Type string `json:"type"`
+		}
+		if json.Unmarshal(message, &head) == nil && head.Type == protocol.TypeDone {
+			e.advanceQueue(sess, proc)
+		}
 	}
-	if json.Unmarshal(payload, &head) != nil || head.Type != protocol.TypeDone {
-		return
-	}
+}
+
+func (e *Engine) advanceQueue(sess *session.Session, proc claudeProc) {
 	e.mu.Lock()
 	queue := e.queues[sess.ID]
 	if len(queue) == 0 {

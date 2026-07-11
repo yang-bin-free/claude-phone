@@ -167,6 +167,13 @@ type TokenMsg struct {
 	Content string `json:"content"`
 }
 
+type ThinkingMsg struct {
+	Type string `json:"type"`
+}
+type DoneMsg struct {
+	Type string `json:"type"`
+}
+
 type PongMsg struct {
 	Type string `json:"type"`
 }

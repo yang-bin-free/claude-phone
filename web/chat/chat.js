@@ -165,6 +165,11 @@
         case "thinking":
           state.assistantChunk = null;
           break;
+        case "tool_use":
+          flushTokens();
+          state.assistantChunk = null;
+          append("assistant", `🔧 ${msg.tool}${msg.input ? `\n${msg.input}` : ""}`);
+          break;
         case "token":
           queueToken(msg.content);
           break;

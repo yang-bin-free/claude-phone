@@ -12,6 +12,9 @@ func TestClaudeProcIncludesAllowedTools(t *testing.T) {
 	if !slices.Contains(args, "--allowedTools") || !slices.Contains(args, "Bash(git status:*)") {
 		t.Fatalf("args missing allowed tools: %v", args)
 	}
+	if !slices.Contains(args, "--include-partial-messages") {
+		t.Fatalf("args missing partial message streaming: %v", args)
+	}
 }
 
 func TestClaudeProc_StreamsTokens(t *testing.T) {
