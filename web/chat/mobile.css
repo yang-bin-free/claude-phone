@@ -1,0 +1,18 @@
+body.mobile { background: #111318; }
+.mobile .app-shell { display: block; min-height: 100vh; }
+.mobile .sidebar { display: none; }
+.mobile .workspace { min-height: 100vh; grid-template-rows: 52px minmax(0, 1fr); }
+.mobile header { padding: env(safe-area-inset-top) 14px 0; }
+.mobile #new-session-mobile { display: inline-flex; width: 38px; height: 38px; align-items: center; justify-content: center; font-size: 22px; }
+.mobile .messages { padding: 18px 14px; }
+.mobile .message { max-width: 88%; font-size: 15px; }
+.mobile #composer { position: sticky; bottom: 0; padding: 10px 12px calc(10px + env(safe-area-inset-bottom)); background: #111318; }
+.mobile #prompt { min-height: 48px; }
+.mobile #composer .primary { min-width: 64px; }
+.mobile .admin-view { display: none; }
+
+@media (max-width: 720px) {
+  .app-shell { display: block; }
+  .sidebar { display: none; }
+  #new-session-mobile { display: inline-flex; }
+}

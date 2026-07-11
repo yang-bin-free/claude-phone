@@ -178,6 +178,12 @@ gomobile 兼容绕过：当前 x/mobile 的 `gomobile bind` 会在临时 ABI 目
 / `go test` 不受影响。等 x/mobile 修复或项目改用 patched gomobile 后可以删除
 这段绕过。
 
+Android 构建还会执行 `syncWebAssets`，把根目录 `web/chat` 与 `web/admin` 的
+共享前端同步进 APK。App 首次启动显示 Mac 地址、Tailscale Auth Key 和可选
+Control URL 配置；VPN 授权后启动内嵌 Go 引擎，并用系统 WebView 打开聊天页。
+Mac 地址和 Control URL 存入应用私有配置，Auth Key 不持久化；Tailscale 登录
+状态由 Go 核心保存在应用私有目录。
+
 ### Mac Agent 网络模式
 
 默认只监听本机回环地址。P0c 跨网络联调时，通过持久化状态目录启用内嵌

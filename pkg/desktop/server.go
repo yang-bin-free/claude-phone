@@ -16,6 +16,7 @@ func NewHandler(engineHandler, adminHandler http.Handler) http.Handler {
 	mux.HandleFunc("/assets/admin.js", serveAsset("admin/admin.js", "text/javascript"))
 	mux.HandleFunc("/assets/core.css", serveAsset("chat/core.css", "text/css"))
 	mux.HandleFunc("/assets/desktop.css", serveAsset("chat/desktop.css", "text/css"))
+	mux.HandleFunc("/assets/mobile.css", serveAsset("chat/mobile.css", "text/css"))
 	mux.HandleFunc("/assets/admin.css", serveAsset("admin/admin.css", "text/css"))
 	return mux
 }

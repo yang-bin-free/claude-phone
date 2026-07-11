@@ -4,9 +4,10 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Claude Phone</title>
-  <link rel="stylesheet" href="/assets/core.css">
-  <link rel="stylesheet" href="/assets/desktop.css">
-  <link rel="stylesheet" href="/assets/admin.css">
+  <link rel="stylesheet" href="../assets/core.css">
+  <link rel="stylesheet" href="../assets/desktop.css">
+  <link rel="stylesheet" href="../assets/mobile.css">
+  <link rel="stylesheet" href="../assets/admin.css">
 </head>
 <body>
   <div class="app-shell">
@@ -17,7 +18,7 @@
       <button id="show-admin" class="quiet">管理与诊断</button>
     </aside>
     <main class="workspace">
-      <header><strong id="view-title">新会话</strong><span id="connection-state">连接中</span></header>
+      <header><button id="new-session-mobile" class="quiet">＋</button><strong id="view-title">新会话</strong><span id="connection-state">连接中</span></header>
       <section id="chat-view" class="chat-view">
         <div id="messages" class="messages"><p class="empty">从 Mac 或手机开始一段会话。</p></div>
         <form id="composer"><textarea id="prompt" rows="3" placeholder="输入消息…"></textarea><button class="primary">发送</button></form>
@@ -28,7 +29,7 @@
       </section>
     </main>
   </div>
-  <script src="/assets/chat.js"></script>
-  <script src="/assets/admin.js"></script>
+  <script src="../assets/chat.js"></script>
+  <script src="../assets/admin.js"></script>
 </body>
 </html>

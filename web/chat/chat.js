@@ -2,7 +2,13 @@
   const state = { ws: null, sessionId: "", retry: 0 };
   const messages = document.querySelector("#messages");
   const connection = document.querySelector("#connection-state");
+  const params = new URLSearchParams(location.search);
   const token = new URLSearchParams(location.hash.slice(1)).get("token") || "";
+  const platform = params.get("platform") || "desktop";
+  const configuredWS = params.get("ws") || "";
+  const deviceToken = params.get("deviceToken") || `${platform}-${token || "local"}`;
+  const deviceName = params.get("deviceName") || (platform === "mobile" ? "Android" : "Mac");
+  document.body.classList.add(platform);
   window.claudePhone = { adminToken: token, state };
 
   function append(role, text) {
@@ -21,13 +27,14 @@
 
   function connect() {
     const scheme = location.protocol === "https:" ? "wss" : "ws";
-    const ws = new WebSocket(`${scheme}://${location.host}/ws`);
+    const endpoint = configuredWS || `${scheme}://${location.host}/ws`;
+    const ws = new WebSocket(endpoint);
     state.ws = ws;
     ws.onopen = () => {
       state.retry = 0;
       connection.textContent = "已连接";
       document.querySelector("#status-dot").classList.add("online");
-      send({ type: "auth", deviceToken: `mac-${token || "local"}`, deviceName: "Mac" });
+      send({ type: "auth", deviceToken, deviceName });
     };
     ws.onclose = () => {
       connection.textContent = "重新连接中";
@@ -43,7 +50,9 @@
     };
   }
 
-  document.querySelector("#new-session").addEventListener("click", () => send({ type: "control", action: "create_session", name: "Mac 会话" }));
+  const createSession = () => send({ type: "control", action: "create_session", name: platform === "mobile" ? "Android 会话" : "Mac 会话" });
+  document.querySelector("#new-session").addEventListener("click", createSession);
+  document.querySelector("#new-session-mobile").addEventListener("click", createSession);
   document.querySelector("#composer").addEventListener("submit", event => {
     event.preventDefault();
     const input = document.querySelector("#prompt");
