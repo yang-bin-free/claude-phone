@@ -254,7 +254,11 @@ func (e *Engine) stopSession(s *session.Session) error {
 	s.Broadcast(b)
 	e.mu.Lock()
 	delete(e.procs, s.ID)
+	idle := len(e.procs) == 0
 	e.mu.Unlock()
+	if idle {
+		_ = e.power.Release()
+	}
 	e.manager.Remove(s.ID)
 	return nil
 }
@@ -302,6 +306,7 @@ func (e *Engine) createSession(cl *client, msg protocol.ControlMsg) (string, err
 	e.mu.Lock()
 	e.procs[s.ID] = proc
 	e.mu.Unlock()
+	_ = e.power.Acquire()
 
 	if err := cl.writeJSON(protocol.SessionCreatedMsg{
 		Type:      protocol.TypeSessionCreated,
@@ -339,6 +344,7 @@ func (e *Engine) resumeSession(s *session.Session) error {
 	e.mu.Lock()
 	e.procs[s.ID] = proc
 	e.mu.Unlock()
+	_ = e.power.Acquire()
 	s.SetStatus("active")
 	return nil
 }

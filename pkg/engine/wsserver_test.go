@@ -218,6 +218,8 @@ func TestHandleControl_LeaveSession(t *testing.T) {
 
 func TestHandleControl_StopSession(t *testing.T) {
 	e := New(Config{})
+	power := &stubPowerInhibitor{active: true}
+	e.power = power
 	e.manager = session.NewManager(session.ManagerConfig{
 		MaxConcurrent: 5,
 		IDFunc:        func() string { return "sess-1" },
@@ -250,6 +252,9 @@ func TestHandleControl_StopSession(t *testing.T) {
 	}
 	if s.Status != "stopped" {
 		t.Fatalf("status=%q", s.Status)
+	}
+	if power.releaseCalls != 1 || power.Active() {
+		t.Fatalf("power inhibitor was not released: %+v", power)
 	}
 }
 
@@ -321,6 +326,16 @@ func mustControl(t *testing.T, v protocol.ControlMsg) []byte {
 type stubClaudeProc struct {
 	stopCalls int
 }
+
+type stubPowerInhibitor struct {
+	active       bool
+	acquireCalls int
+	releaseCalls int
+}
+
+func (p *stubPowerInhibitor) Acquire() error { p.active = true; p.acquireCalls++; return nil }
+func (p *stubPowerInhibitor) Release() error { p.active = false; p.releaseCalls++; return nil }
+func (p *stubPowerInhibitor) Active() bool   { return p.active }
 
 func (p *stubClaudeProc) OnOutput(session.OutputFunc) {}
 func (p *stubClaudeProc) Start() error                { return nil }

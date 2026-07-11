@@ -19,6 +19,10 @@ import (
 )
 
 func main() {
+	if len(os.Args) > 1 && os.Args[1] == "autostart" {
+		runAutostart(os.Args[2:])
+		return
+	}
 	fs := flag.NewFlagSet("claude-phone", flag.ExitOnError)
 	desktopAddr := fs.String("desktop-addr", "127.0.0.1:9877", "loopback desktop listen address")
 	claudeBin := fs.String("claude-bin", "claude", "Claude CLI binary")
@@ -63,6 +67,37 @@ func main() {
 	}
 	if err := <-serverDone; err != nil {
 		log.Fatal(err)
+	}
+}
+
+func runAutostart(args []string) {
+	action := "status"
+	if len(args) > 0 {
+		action = args[0]
+	}
+	switch action {
+	case "install":
+		executable, err := os.Executable()
+		if err != nil {
+			log.Fatal(err)
+		}
+		if err := desktop.InstallAutostart(executable, nil); err != nil {
+			log.Fatal(err)
+		}
+		fmt.Println("autostart installed")
+	case "uninstall":
+		if err := desktop.UninstallAutostart(); err != nil {
+			log.Fatal(err)
+		}
+		fmt.Println("autostart uninstalled")
+	case "status":
+		if desktop.AutostartEnabled() {
+			fmt.Println("enabled")
+		} else {
+			fmt.Println("disabled")
+		}
+	default:
+		log.Fatal("usage: claude-phone autostart install|uninstall|status")
 	}
 }
 

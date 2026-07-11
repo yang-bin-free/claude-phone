@@ -25,6 +25,7 @@ type Diagnostics struct {
 	AllocBytes    uint64 `json:"allocBytes"`
 	SysBytes      uint64 `json:"sysBytes"`
 	DataDir       string `json:"dataDir"`
+	Caffeinating  bool   `json:"caffeinating"`
 }
 
 type Project struct {

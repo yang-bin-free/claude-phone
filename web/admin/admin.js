@@ -11,7 +11,8 @@
       ["在线设备", agent.connectedDevices?.length || 0], ["活跃会话", agent.sessions?.length || 0],
       ["Agent", agent.agentVersion], ["Claude", agent.claudeVersion],
       ["运行时间", `${diagnostics.uptimeSeconds}s`], ["内存", `${Math.round(diagnostics.allocBytes / 1048576)} MB`],
-      ["Goroutine", diagnostics.goroutines], ["平台", `${diagnostics.goos}/${diagnostics.goarch}`]
+      ["Goroutine", diagnostics.goroutines], ["平台", `${diagnostics.goos}/${diagnostics.goarch}`],
+      ["防睡眠", diagnostics.caffeinating ? "已启用" : "空闲"]
     ].map(([label, value]) => `<article><span>${label}</span><strong>${value}</strong></article>`).join("");
     document.querySelector("#admin-sessions").textContent = agent.sessions?.length ? JSON.stringify(agent.sessions, null, 2) : "暂无活跃会话";
     const deviceList = document.querySelector("#admin-devices");

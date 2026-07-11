@@ -133,7 +133,7 @@ func (e *Engine) diagnostics() adminproto.Diagnostics {
 		GoVersion: runtime.Version(), GOOS: runtime.GOOS, GOARCH: runtime.GOARCH,
 		PID: os.Getpid(), UptimeSeconds: int64(time.Since(e.startedAt).Seconds()),
 		Goroutines: runtime.NumGoroutine(), AllocBytes: memory.Alloc, SysBytes: memory.Sys,
-		DataDir: e.cfg.DataDir,
+		DataDir: e.cfg.DataDir, Caffeinating: e.power.Active(),
 	}
 }
 
