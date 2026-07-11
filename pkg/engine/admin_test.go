@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -38,6 +40,55 @@ func TestAdminHandlerRejectsUnauthorizedOrRemoteRequests(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestAdminHandlerPersistsAndDeletesProjects(t *testing.T) {
+	dataDir := t.TempDir()
+	projectDir := t.TempDir()
+	e := New(Config{DataDir: dataDir})
+	h := e.AdminHandler("secret")
+
+	body := `{"name":"Demo","path":` + mustJSONString(t, projectDir) + `,"permission":"default"}`
+	createW := httptest.NewRecorder()
+	h.ServeHTTP(createW, adminRequest(http.MethodPost, "/admin/projects", body, "secret"))
+	if createW.Code != http.StatusCreated {
+		t.Fatalf("create status=%d body=%s", createW.Code, createW.Body.String())
+	}
+	var created adminproto.Project
+	if err := json.NewDecoder(createW.Body).Decode(&created); err != nil {
+		t.Fatal(err)
+	}
+	if created.ProjectID == "" || created.Path != projectDir {
+		t.Fatalf("created=%+v", created)
+	}
+	if _, err := os.Stat(filepath.Join(dataDir, "projects.yaml")); err != nil {
+		t.Fatalf("projects file: %v", err)
+	}
+
+	statusW := httptest.NewRecorder()
+	h.ServeHTTP(statusW, adminRequest(http.MethodGet, "/admin/status", "", "secret"))
+	var snapshot adminproto.Snapshot
+	if err := json.NewDecoder(statusW.Body).Decode(&snapshot); err != nil {
+		t.Fatal(err)
+	}
+	if len(snapshot.Projects) != 1 || snapshot.Projects[0].Name != "Demo" {
+		t.Fatalf("projects=%+v", snapshot.Projects)
+	}
+
+	deleteW := httptest.NewRecorder()
+	h.ServeHTTP(deleteW, adminRequest(http.MethodDelete, "/admin/projects/"+created.ProjectID, "", "secret"))
+	if deleteW.Code != http.StatusNoContent {
+		t.Fatalf("delete status=%d body=%s", deleteW.Code, deleteW.Body.String())
+	}
+}
+
+func mustJSONString(t *testing.T, value string) string {
+	t.Helper()
+	b, err := json.Marshal(value)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(b)
 }
 
 func TestAdminHandlerReturnsSnapshotAndStopsSession(t *testing.T) {

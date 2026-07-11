@@ -5,6 +5,9 @@
 .metric-grid strong { font-size: 20px; }
 #admin-sessions { background: #171a21; border-radius: 12px; padding: 16px; white-space: pre-wrap; color: #aeb5c5; }
 #admin-devices { background: #171a21; border-radius: 12px; padding: 8px 14px; color: #aeb5c5; }
-.device-row { min-height: 44px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #282d38; }
+.device-row, .project-row { min-height: 44px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #282d38; gap: 12px; }
 .device-row:last-child { border-bottom: 0; }
 .danger { color: #ff8f9d; }
+#admin-projects { background: #171a21; border-radius: 12px; padding: 8px 14px; color: #aeb5c5; }
+#project-form { display: grid; grid-template-columns: 160px minmax(240px, 1fr) auto; gap: 10px; margin-bottom: 10px; }
+#project-form input { border: 1px solid #343a48; border-radius: 9px; background: #1b1e26; color: inherit; padding: 10px; }

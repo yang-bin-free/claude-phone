@@ -8,9 +8,40 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
+	"github.com/yang-bin-free/claude-phone/pkg/adminproto"
 	"github.com/yang-bin-free/claude-phone/pkg/protocol"
 	"github.com/yang-bin-free/claude-phone/pkg/session"
 )
+
+func TestWebSocket_ListProjectsUsesAdminProjectStore(t *testing.T) {
+	e := New(Config{DataDir: t.TempDir()})
+	projectDir := t.TempDir()
+	if _, err := e.projects.Add(adminproto.Project{Name: "Demo", Path: projectDir, Permission: "default"}); err != nil {
+		t.Fatal(err)
+	}
+	ts := httptest.NewServer(e.Handler())
+	defer ts.Close()
+	conn, _, err := websocket.DefaultDialer.Dial("ws"+ts.URL[len("http"):]+"/ws", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+	writeJSON(t, conn, protocol.AuthMsg{Type: protocol.TypeAuth, DeviceToken: "device", DeviceName: "Android"})
+	assertType(t, conn, protocol.TypeHello)
+	writeJSON(t, conn, protocol.ControlMsg{Type: protocol.TypeControl, Action: protocol.ActionListProjects})
+	_ = conn.SetReadDeadline(time.Now().Add(time.Second))
+	_, payload, err := conn.ReadMessage()
+	if err != nil {
+		t.Fatalf("read projects: %v", err)
+	}
+	var msg protocol.ProjectListMsg
+	if err := json.Unmarshal(payload, &msg); err != nil {
+		t.Fatal(err)
+	}
+	if msg.Type != protocol.TypeProjectList || len(msg.Projects) != 1 || msg.Projects[0].Path != projectDir {
+		t.Fatalf("project list: %+v", msg)
+	}
+}
 
 func TestWebSocket_CreateSessionAndStream(t *testing.T) {
 	e := New(Config{

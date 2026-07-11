@@ -73,6 +73,7 @@ func parseServeConfig(args []string) (engine.Config, tsnetOptions, error) {
 	claudeBin := fs.String("claude-bin", "claude", "Claude CLI binary")
 	workdir := fs.String("workdir", ".", "default Claude working directory")
 	permission := fs.String("permission", "default", "default Claude permission mode")
+	dataDir := fs.String("data-dir", "", "Claude Phone configuration directory")
 	tsnetDir := fs.String("tsnet-dir", "", "persistent tsnet state directory (enables tailnet listener)")
 	tsnetHostname := fs.String("tsnet-hostname", "claude-mac", "tailnet hostname")
 	tsnetAuthKey := fs.String("tsnet-auth-key", os.Getenv("TS_AUTHKEY"), "Tailscale auth key (or TS_AUTHKEY)")
@@ -86,6 +87,7 @@ func parseServeConfig(args []string) (engine.Config, tsnetOptions, error) {
 			ClaudeBin:         *claudeBin,
 			DefaultWorkingDir: *workdir,
 			DefaultPermission: *permission,
+			DataDir:           *dataDir,
 		}, tsnetOptions{
 			Dir:        *tsnetDir,
 			Hostname:   *tsnetHostname,

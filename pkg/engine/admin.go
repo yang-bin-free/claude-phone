@@ -17,7 +17,37 @@ const maxAdminBodyBytes = 64 << 10
 func (e *Engine) AdminHandler(token string) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /admin/status", func(w http.ResponseWriter, _ *http.Request) {
-		writeAdminJSON(w, http.StatusOK, adminproto.Snapshot{Agent: adminStatus(e.Status()), Devices: e.adminDevices()})
+		projects, err := e.projects.List()
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		writeAdminJSON(w, http.StatusOK, adminproto.Snapshot{Agent: adminStatus(e.Status()), Devices: e.adminDevices(), Projects: projects})
+	})
+	mux.HandleFunc("POST /admin/projects", func(w http.ResponseWriter, r *http.Request) {
+		var project adminproto.Project
+		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxAdminBodyBytes)).Decode(&project); err != nil {
+			http.Error(w, "invalid request", http.StatusBadRequest)
+			return
+		}
+		created, err := e.projects.Add(project)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		writeAdminJSON(w, http.StatusCreated, created)
+	})
+	mux.HandleFunc("DELETE /admin/projects/{projectID}", func(w http.ResponseWriter, r *http.Request) {
+		found, err := e.projects.Delete(r.PathValue("projectID"))
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		if !found {
+			http.Error(w, "project not found", http.StatusNotFound)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
 	})
 	mux.HandleFunc("DELETE /admin/devices/{deviceID}", func(w http.ResponseWriter, r *http.Request) {
 		if !e.revokeDevice(r.PathValue("deviceID")) {

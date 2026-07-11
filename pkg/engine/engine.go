@@ -25,18 +25,20 @@ type Engine struct {
 	factory ClaudeFactory
 	server  *http.Server
 
-	mu      sync.RWMutex
-	clients map[string]*client
-	procs   map[string]claudeProc
+	mu       sync.RWMutex
+	clients  map[string]*client
+	procs    map[string]claudeProc
+	projects *projectStore
 }
 
 func New(cfg Config) *Engine {
 	cfg = cfg.withDefaults()
 	e := &Engine{
-		cfg:     cfg,
-		manager: session.NewManager(session.ManagerConfig{MaxConcurrent: cfg.MaxConcurrentSession}),
-		clients: map[string]*client{},
-		procs:   map[string]claudeProc{},
+		cfg:      cfg,
+		manager:  session.NewManager(session.ManagerConfig{MaxConcurrent: cfg.MaxConcurrentSession}),
+		clients:  map[string]*client{},
+		procs:    map[string]claudeProc{},
+		projects: newProjectStore(cfg.DataDir),
 	}
 	e.factory = func(c session.ClaudeConfig) claudeProc { return session.NewClaudeProc(c) }
 	return e

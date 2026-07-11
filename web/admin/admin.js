@@ -6,7 +6,7 @@
     const token = window.claudePhone.adminToken;
     const response = await fetch("/admin/status", { headers: { Authorization: `Bearer ${token}` } });
     if (!response.ok) throw new Error(`admin status ${response.status}`);
-    const { agent, devices } = await response.json();
+    const { agent, devices, projects } = await response.json();
     document.querySelector("#metrics").innerHTML = [
       ["在线设备", agent.connectedDevices?.length || 0], ["活跃会话", agent.sessions?.length || 0],
       ["Agent", agent.agentVersion], ["Claude", agent.claudeVersion]
@@ -27,6 +27,21 @@
       deviceList.append(row);
     });
     if (!devices?.length) deviceList.textContent = "暂无已授权设备";
+    const projectList = document.querySelector("#admin-projects");
+    projectList.replaceChildren();
+    (projects || []).forEach(project => {
+      const row = document.createElement("div");
+      row.className = "project-row";
+      const label = document.createElement("span");
+      label.textContent = `${project.name} — ${project.path}`;
+      const remove = document.createElement("button");
+      remove.className = "quiet danger";
+      remove.textContent = "删除";
+      remove.addEventListener("click", () => deleteProject(project.projectId));
+      row.append(label, remove);
+      projectList.append(row);
+    });
+    if (!projects?.length) projectList.textContent = "尚未配置工作目录";
   }
   async function revokeDevice(deviceId) {
     const response = await fetch(`/admin/devices/${encodeURIComponent(deviceId)}`, {
@@ -36,6 +51,24 @@
     if (!response.ok) throw new Error(`revoke device ${response.status}`);
     await refresh();
   }
+  async function deleteProject(projectId) {
+    const response = await fetch(`/admin/projects/${encodeURIComponent(projectId)}`, {
+      method: "DELETE", headers: { Authorization: `Bearer ${window.claudePhone.adminToken}` }
+    });
+    if (!response.ok) throw new Error(`delete project ${response.status}`);
+    await refresh();
+  }
+  document.querySelector("#project-form").addEventListener("submit", async event => {
+    event.preventDefault();
+    const response = await fetch("/admin/projects", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${window.claudePhone.adminToken}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ name: document.querySelector("#project-name").value.trim(), path: document.querySelector("#project-path").value.trim(), permission: "default" })
+    });
+    if (!response.ok) throw new Error(await response.text());
+    event.target.reset();
+    await refresh();
+  });
   document.querySelector("#show-admin").addEventListener("click", async () => {
     chat.hidden = true; admin.hidden = false; title.textContent = "管理与诊断";
     try { await refresh(); } catch (error) { document.querySelector("#admin-sessions").textContent = error.message; }

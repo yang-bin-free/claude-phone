@@ -24,6 +24,7 @@ func main() {
 	claudeBin := fs.String("claude-bin", "claude", "Claude CLI binary")
 	workdir := fs.String("workdir", ".", "default Claude working directory")
 	permission := fs.String("permission", "default", "default Claude permission mode")
+	dataDir := fs.String("data-dir", "", "Claude Phone configuration directory")
 	_ = fs.Parse(os.Args[1:])
 
 	if err := validateDesktopAddr(*desktopAddr); err != nil {
@@ -41,6 +42,7 @@ func main() {
 	e := engine.New(engine.Config{
 		Addr: *desktopAddr, ClaudeBin: *claudeBin, DefaultWorkingDir: *workdir,
 		DefaultPermission: *permission,
+		DataDir:           *dataDir,
 	})
 	handler := desktop.NewHandler(e.Handler(), e.AdminHandler(token))
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)

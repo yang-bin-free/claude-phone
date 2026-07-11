@@ -2,8 +2,16 @@
 package adminproto
 
 type Snapshot struct {
-	Agent   AgentStatus      `json:"agent"`
-	Devices []DeviceSnapshot `json:"devices"`
+	Agent    AgentStatus      `json:"agent"`
+	Devices  []DeviceSnapshot `json:"devices"`
+	Projects []Project        `json:"projects"`
+}
+
+type Project struct {
+	ProjectID  string `json:"projectId" yaml:"-"`
+	Name       string `json:"name" yaml:"name"`
+	Path       string `json:"path" yaml:"path"`
+	Permission string `json:"permission" yaml:"permission,omitempty"`
 }
 
 type DeviceSnapshot struct {

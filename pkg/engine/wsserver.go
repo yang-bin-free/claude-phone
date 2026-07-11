@@ -191,6 +191,16 @@ func (e *Engine) handleControl(cl *client, currentSession string, raw []byte) (s
 			limit = len(e.manager.List())
 		}
 		return currentSession, cl.writeJSON(e.sessionList(limit, msg.Offset))
+	case protocol.ActionListProjects:
+		projects, err := e.projects.List()
+		if err != nil {
+			return currentSession, err
+		}
+		items := make([]protocol.ProjectInfo, 0, len(projects))
+		for _, project := range projects {
+			items = append(items, protocol.ProjectInfo{Name: project.Name, Path: project.Path, Permission: project.Permission})
+		}
+		return currentSession, cl.writeJSON(protocol.ProjectListMsg{Type: protocol.TypeProjectList, Projects: items})
 	default:
 		return currentSession, nil
 	}

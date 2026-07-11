@@ -1,7 +1,11 @@
 // Package engine exposes the headless Claude Phone engine over WebSocket.
 package engine
 
-import "time"
+import (
+	"os"
+	"path/filepath"
+	"time"
+)
 
 const DefaultAddr = "127.0.0.1:9876"
 
@@ -15,6 +19,7 @@ type Config struct {
 	MaxConcurrentSession int
 	WriteTimeout         time.Duration
 	DeviceTokens         map[string]string
+	DataDir              string
 }
 
 func (c Config) withDefaults() Config {
@@ -41,6 +46,16 @@ func (c Config) withDefaults() Config {
 	}
 	if c.WriteTimeout <= 0 {
 		c.WriteTimeout = 5 * time.Second
+	}
+	if c.DataDir == "" {
+		if home, err := os.UserHomeDir(); err == nil {
+			c.DataDir = filepath.Join(home, ".claude-phone")
+		} else {
+			c.DataDir = ".claude-phone"
+		}
+	}
+	if c.DeviceTokens == nil {
+		c.DeviceTokens = map[string]string{}
 	}
 	return c
 }

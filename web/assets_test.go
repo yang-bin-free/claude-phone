@@ -28,6 +28,7 @@ func TestSharedChatAssetsSupportMobileRemoteConnection(t *testing.T) {
 		"case \"session_list\"", "assistantChunk", "action: \"select_session\"",
 		"action: \"stop_session\"", "AndroidBridge.openSettings",
 		"/admin/devices/", "revokeDevice",
+		"/admin/projects", "deleteProject",
 	} {
 		if !strings.Contains(scripts, marker) {
 			t.Fatalf("shared scripts missing %q", marker)

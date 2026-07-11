@@ -126,6 +126,17 @@ type SessionListMsg struct {
 	Sessions []SessionInfo `json:"sessions"`
 }
 
+type ProjectInfo struct {
+	Name       string `json:"name"`
+	Path       string `json:"path"`
+	Permission string `json:"permission,omitempty"`
+}
+
+type ProjectListMsg struct {
+	Type     string        `json:"type"`
+	Projects []ProjectInfo `json:"projects"`
+}
+
 type SessionCreatedMsg struct {
 	Type      string `json:"type"`
 	SessionID string `json:"sessionId"`
