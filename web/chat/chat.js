@@ -1,5 +1,5 @@
 (() => {
-  const state = { ws: null, sessionId: "", retry: 0, assistantChunk: null, sessions: [], projects: [], templates: [] };
+  const state = { ws: null, sessionId: "", retry: 0, assistantChunk: null, pendingTokens: "", tokenFrame: 0, sessions: [], projects: [], templates: [] };
   const messages = document.querySelector("#messages");
   const connection = document.querySelector("#connection-state");
   const params = new URLSearchParams(location.search);
@@ -21,8 +21,30 @@
     node.className = `message ${role}`;
     node.textContent = text;
     messages.append(node);
+    while (messages.children.length > 500) messages.firstElementChild?.remove();
     messages.scrollTop = messages.scrollHeight;
     return node;
+  }
+
+  function flushTokens() {
+    state.tokenFrame = 0;
+    if (!state.pendingTokens) return;
+    if (!state.assistantChunk) state.assistantChunk = append("assistant", "");
+    state.assistantChunk.textContent += state.pendingTokens;
+    state.pendingTokens = "";
+    messages.scrollTop = messages.scrollHeight;
+  }
+
+  function queueToken(content) {
+    state.pendingTokens += content || "";
+    if (!state.tokenFrame) state.tokenFrame = requestAnimationFrame(flushTokens);
+  }
+
+  function resetStream() {
+    if (state.tokenFrame) cancelAnimationFrame(state.tokenFrame);
+    state.tokenFrame = 0;
+    state.pendingTokens = "";
+    state.assistantChunk = null;
   }
 
   function send(value) {
@@ -31,7 +53,7 @@
 
   function selectSession(sessionId, name) {
     state.sessionId = sessionId;
-    state.assistantChunk = null;
+    resetStream();
     document.querySelector("#view-title").textContent = name || "会话";
     document.querySelector("#stop-session").disabled = false;
     messages.replaceChildren();
@@ -42,7 +64,7 @@
 
   function renderHistory(items) {
     messages.replaceChildren();
-    state.assistantChunk = null;
+    resetStream();
     let assistant = null;
     (items || []).forEach(item => {
       if (item.type === "text") {
@@ -103,7 +125,7 @@
           break;
         case "session_created":
           state.sessionId = msg.sessionId;
-          state.assistantChunk = null;
+          resetStream();
           document.querySelector("#view-title").textContent = msg.name || "新会话";
           document.querySelector("#stop-session").disabled = false;
           send({ type: "control", action: "list_sessions", limit: 100 });
@@ -139,11 +161,10 @@
           state.assistantChunk = null;
           break;
         case "token":
-          if (!state.assistantChunk) state.assistantChunk = append("assistant", "");
-          state.assistantChunk.textContent += msg.content;
-          messages.scrollTop = messages.scrollHeight;
+          queueToken(msg.content);
           break;
         case "done":
+          flushTokens();
           state.assistantChunk = null;
           break;
         case "session_stopped":
