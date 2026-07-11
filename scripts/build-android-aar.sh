@@ -83,4 +83,7 @@ gomobile bind \
   -target=android \
   -androidapi=26 \
   -o build/claudelib.aar \
-  "${module_path}/pkg/androidlib"
+  "${module_path}/pkg/androidlib" \
+  "${module_path}/pkg/androidlib/tailscale"
+
+"$(dirname "$0")/test-android-aar.sh" build/claudelib.aar

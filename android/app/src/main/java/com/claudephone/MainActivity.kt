@@ -19,12 +19,12 @@ class MainActivity : Activity() {
         // P0a verification: basic gomobile bind
         val greeting = Androidlib.hello("阿彬")
 
-        // P0b verification: show that tailscale package is available
+        // P0b/P0c verification: the bound Tailscale engine is packaged in the AAR.
         val tv = TextView(this)
         tv.text = """
             $greeting
 
-            P0b: tailscale package bound ✓
+            P0b: Tailscale engine packaged ✓
 
             Classes available:
             - EngineBackend
@@ -58,12 +58,16 @@ class MainActivity : Activity() {
 
     private fun startVpnAndEngine() {
         // ★ P0b core: start IPNService (VpnService subclass)
-        val intent = Intent(this, IPNServiceImpl::class.java)
-        startService(intent)
+        val serviceIntent = Intent(this, IPNServiceImpl::class.java).apply {
+            putExtra(IPNServiceImpl.EXTRA_HOSTNAME, intent.getStringExtra(IPNServiceImpl.EXTRA_HOSTNAME))
+            putExtra(IPNServiceImpl.EXTRA_AUTH_KEY, intent.getStringExtra(IPNServiceImpl.EXTRA_AUTH_KEY))
+            putExtra(IPNServiceImpl.EXTRA_CONTROL_URL, intent.getStringExtra(IPNServiceImpl.EXTRA_CONTROL_URL))
+        }
+        startService(serviceIntent)
 
         // Show result
         val tv = TextView(this)
-        tv.text = "VPN Service started! Engine integration pending P0c."
+        tv.text = "VPN Service started. Go Tailscale engine is connecting..."
         tv.textSize = 18f
         setContentView(tv)
     }
