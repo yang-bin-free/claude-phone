@@ -8,9 +8,9 @@
 
 ## 1. 当前状态快照
 
-- **已完成**：P0a（gomobile bind POC，commit `234b1e5`）；V2 设计方案 + Mac 桌面客户端 spec + 引擎核心实现计划（Plan 1）。
-- **进行中（另一会话，线 A）**：P0b Android Tailscale 引擎，`pkg/androidlib/tailscale/`（6 文件约 830 行，**未提交**）。
-- **待启动（本会话，线 B）**：Plan 1 引擎核心 → Plan 2 Mac 桌面 GUI。
+- **已完成**：P0a；P0b Android Tailscale AAR/VpnService 桥；P1 引擎核心；Mac 桌面本地管理 API、共享聊天 UI 与原生 WebView。
+- **进行中（线 A）**：P0c 实机跨网络验收，等待 Android 设备与有效 Tailscale Auth Key。
+- **进行中（线 B）**：Plan 2 Mac 桌面 GUI 的菜单栏常驻与关窗隐藏生命周期。
 
 ## 2. 两条并行线
 
@@ -80,9 +80,9 @@ Mac（线 B）与 Android（线 A）共享 `web/chat` 的**逻辑层 + 结构层
 
 ## 7. 本会话（线 B）的下一步
 
-1. **执行 Plan 1（引擎核心）**——10 个 TDD 任务，产出可测引擎 + `pkg/protocol` 定稿。
-2. Plan 1 落地后**写 Plan 2（Mac 桌面 GUI）**——那时能引用真实 `Engine`/`Session` 接口，计划更精确。
-3. 与线 A 在 **M2（P0c）** 首次联调网络层。
+1. 完成 Plan 2 Darwin 菜单栏常驻和关窗隐藏生命周期。
+2. 补齐管理区的设备吊销、工作目录与诊断操作。
+3. Android 设备与 Auth Key 就绪后执行 **M2（P0c）** 实机联调。
 
 ## 8. 未纳入当前规划（V2+，README §8）
 
