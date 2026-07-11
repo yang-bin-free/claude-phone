@@ -24,12 +24,12 @@ jobs:
       - name: Check secrets and licenses
         shell: bash
         run: |
-          if rg -n --hidden -g '!.git/**' 'tskey-auth-[A-Za-z0-9_-]{8,}' .; then
+          if grep -RInE --exclude-dir=.git --exclude-dir=build --exclude-dir=.gradle 'tskey-auth-[A-Za-z0-9_-]{8,}' .; then
             echo "Tailscale Auth Key detected" >&2
             exit 1
           fi
           for file in pkg/androidlib/tailscale/multitun.go pkg/androidlib/tailscale/vpnfacade.go; do
-            rg -q 'SPDX-License-Identifier: BSD-3-Clause' "$file"
+            grep -q 'SPDX-License-Identifier: BSD-3-Clause' "$file"
           done
           test -f LICENSE
           test -f NOTICE
