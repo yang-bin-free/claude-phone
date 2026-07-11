@@ -10,7 +10,7 @@
 
 - **已完成**：P0a；P0b Android Tailscale AAR/VpnService 桥；P1/P2 引擎核心与可靠性；Mac 桌面本地管理 API、共享聊天 UI、原生 WebView；Android WebView/语音/配对；干净克隆构建与发布包校验。
 - **进行中（线 A）**：P0c 实机跨网络验收，等待 Android 设备与有效 Tailscale Auth Key。
-- **已实现待验证（线 B）**：Mac 桌面 GUI 的真实窗口/菜单栏行为；Android 真机 VPN 与跨 tailnet 联调。
+- **已实现待验证（线 B）**：Mac 桌面 GUI 的真实窗口/菜单栏行为；Android 真机 VPN；iOS 18 Xcode 签名构建、Packet Tunnel 与跨 tailnet 联调。
 
 ## 2. 两条并行线
 

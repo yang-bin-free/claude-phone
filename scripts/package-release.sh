@@ -17,6 +17,13 @@ else
   echo "Android APK not found; run 'make android-apk' before packaging." >&2
 fi
 
+ipa="build/ios/ClaudePhone.ipa"
+if [[ -f "${ipa}" ]]; then
+  cp "${ipa}" "${release_dir}/claude-phone-ios-${version}.ipa"
+else
+  echo "iOS IPA not found; export build/ios/ClaudePhone.ipa from signed Xcode archive to include it." >&2
+fi
+
 cp LICENSE NOTICE THIRD_PARTY_LICENSES.md "${release_dir}/"
 rm -f "${release_dir}/SHA256SUMS"
 shasum -a 256 "${release_dir}"/* >"${release_dir}/SHA256SUMS"
