@@ -1,6 +1,9 @@
 package engine
 
-import "sort"
+import (
+	"sort"
+	"time"
+)
 
 // StatusReport describes the current runtime state of the agent.
 type StatusReport struct {
@@ -24,6 +27,8 @@ type SessionSnapshot struct {
 	Subscribers []string `json:"subscribers"`
 	CreatedAt   int64    `json:"createdAt"`
 	Running     bool     `json:"running"`
+	Health      string   `json:"health"`
+	IdleSeconds int64    `json:"idleSeconds"`
 }
 
 // Status returns a snapshot of the current engine state.
@@ -38,6 +43,10 @@ func (e *Engine) Status() StatusReport {
 	for id := range e.procs {
 		procs[id] = struct{}{}
 	}
+	activity := make(map[string]time.Time, len(e.activity))
+	for id, last := range e.activity {
+		activity[id] = last
+	}
 	e.mu.RUnlock()
 
 	sort.Strings(connected)
@@ -46,6 +55,10 @@ func (e *Engine) Status() StatusReport {
 	snaps := make([]SessionSnapshot, 0, len(sessions))
 	for _, s := range sessions {
 		_, running := procs[s.ID]
+		health, idle := "idle", int64(0)
+		if running {
+			health, idle = e.healthAt(activity[s.ID], time.Now())
+		}
 		subscribers := s.Subscribers()
 		for i, token := range subscribers {
 			subscribers[i] = e.safeDeviceDisplayName(token)
@@ -58,6 +71,8 @@ func (e *Engine) Status() StatusReport {
 			Subscribers: subscribers,
 			CreatedAt:   s.CreatedAt,
 			Running:     running,
+			Health:      health,
+			IdleSeconds: idle,
 		})
 	}
 

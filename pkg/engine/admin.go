@@ -225,7 +225,7 @@ func adminStatus(status StatusReport) adminproto.AgentStatus {
 	for _, s := range status.Sessions {
 		sessions = append(sessions, adminproto.SessionSnapshot{
 			SessionID: s.SessionID, Name: s.Name, Status: s.Status, Owner: s.Owner,
-			Subscribers: s.Subscribers, CreatedAt: s.CreatedAt, Running: s.Running,
+			Subscribers: s.Subscribers, CreatedAt: s.CreatedAt, Running: s.Running, Health: s.Health, IdleSeconds: s.IdleSeconds,
 		})
 	}
 	return adminproto.AgentStatus{

@@ -21,6 +21,9 @@ type Config struct {
 	DeviceTokens         map[string]string
 	DataDir              string
 	ConfigPollInterval   time.Duration
+	HealthPollInterval   time.Duration
+	StalledAfter         time.Duration
+	UnresponsiveAfter    time.Duration
 }
 
 func (c Config) withDefaults() Config {
@@ -47,6 +50,15 @@ func (c Config) withDefaults() Config {
 	}
 	if c.WriteTimeout <= 0 {
 		c.WriteTimeout = 5 * time.Second
+	}
+	if c.HealthPollInterval <= 0 {
+		c.HealthPollInterval = 30 * time.Second
+	}
+	if c.StalledAfter <= 0 {
+		c.StalledAfter = 2 * time.Minute
+	}
+	if c.UnresponsiveAfter <= 0 {
+		c.UnresponsiveAfter = 5 * time.Minute
 	}
 	if c.DataDir == "" {
 		if home, err := os.UserHomeDir(); err == nil {

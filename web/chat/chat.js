@@ -109,6 +109,11 @@
         case "history":
           if (msg.sessionId === state.sessionId) renderHistory(msg.messages);
           break;
+        case "health":
+          if (msg.sessionId === state.sessionId) {
+            connection.textContent = msg.state === "healthy" ? "已连接" : (msg.state === "stalled" ? "会话可能卡住" : "会话无响应");
+          }
+          break;
         case "thinking":
           state.assistantChunk = null;
           break;

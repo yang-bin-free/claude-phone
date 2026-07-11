@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"time"
 
 	"github.com/gorilla/websocket"
 	"github.com/yang-bin-free/claude-phone/pkg/protocol"
@@ -254,6 +255,8 @@ func (e *Engine) stopSession(s *session.Session) error {
 	s.Broadcast(b)
 	e.mu.Lock()
 	delete(e.procs, s.ID)
+	delete(e.activity, s.ID)
+	delete(e.healthState, s.ID)
 	idle := len(e.procs) == 0
 	e.mu.Unlock()
 	if idle {
@@ -296,6 +299,7 @@ func (e *Engine) createSession(cl *client, msg protocol.ControlMsg) (string, err
 		AllowedTools: e.permissions.AllowedTools(),
 	})
 	proc.OnOutput(func(payload []byte) {
+		e.recordActivity(s.ID)
 		_ = e.history.Append(s.ID, payload)
 		s.Broadcast(payload)
 	})
@@ -305,6 +309,7 @@ func (e *Engine) createSession(cl *client, msg protocol.ControlMsg) (string, err
 	}
 	e.mu.Lock()
 	e.procs[s.ID] = proc
+	e.activity[s.ID] = time.Now()
 	e.mu.Unlock()
 	_ = e.power.Acquire()
 
@@ -335,6 +340,7 @@ func (e *Engine) resumeSession(s *session.Session) error {
 		AllowedTools: e.permissions.AllowedTools(),
 	})
 	proc.OnOutput(func(payload []byte) {
+		e.recordActivity(s.ID)
 		_ = e.history.Append(s.ID, payload)
 		s.Broadcast(payload)
 	})
@@ -343,6 +349,7 @@ func (e *Engine) resumeSession(s *session.Session) error {
 	}
 	e.mu.Lock()
 	e.procs[s.ID] = proc
+	e.activity[s.ID] = time.Now()
 	e.mu.Unlock()
 	_ = e.power.Acquire()
 	s.SetStatus("active")

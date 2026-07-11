@@ -70,6 +70,8 @@ type SessionSnapshot struct {
 	Subscribers []string `json:"subscribers"`
 	CreatedAt   int64    `json:"createdAt"`
 	Running     bool     `json:"running"`
+	Health      string   `json:"health"`
+	IdleSeconds int64    `json:"idleSeconds"`
 }
 
 type StopSessionRequest struct {

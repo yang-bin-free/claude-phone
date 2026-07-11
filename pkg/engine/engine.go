@@ -40,6 +40,8 @@ type Engine struct {
 	stopWatch   chan struct{}
 	closeOnce   sync.Once
 	power       powerInhibitor
+	activity    map[string]time.Time
+	healthState map[string]string
 }
 
 func New(cfg Config) *Engine {
@@ -57,6 +59,8 @@ func New(cfg Config) *Engine {
 		runtime:     runtimeConfig{DefaultWorkingDir: cfg.DefaultWorkingDir, DefaultPermission: cfg.DefaultPermission, MaxConcurrentSessions: cfg.MaxConcurrentSession},
 		stopWatch:   make(chan struct{}),
 		power:       newPowerInhibitor(),
+		activity:    map[string]time.Time{},
+		healthState: map[string]string{},
 	}
 	e.factory = func(c session.ClaudeConfig) claudeProc { return session.NewClaudeProc(c) }
 	if persisted, err := e.history.Restore(); err == nil {
@@ -68,6 +72,7 @@ func New(cfg Config) *Engine {
 	}
 	_ = e.reloadRuntimeConfig()
 	go e.watchRuntimeConfig()
+	go e.monitorHealth()
 	return e
 }
 

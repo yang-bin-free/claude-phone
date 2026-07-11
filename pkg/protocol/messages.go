@@ -32,6 +32,7 @@ const (
 	TypeQueued          = "queued"
 	TypeDequeued        = "dequeued"
 	TypePong            = "pong"
+	TypeHealth          = "health"
 )
 
 // control action 常量。
@@ -156,6 +157,13 @@ type TokenMsg struct {
 
 type PongMsg struct {
 	Type string `json:"type"`
+}
+
+type HealthMsg struct {
+	Type        string `json:"type"`
+	SessionID   string `json:"sessionId"`
+	State       string `json:"state"`
+	IdleSeconds int64  `json:"idleSeconds"`
 }
 
 type HistoryMsg struct {
