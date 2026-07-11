@@ -366,12 +366,9 @@ claude --print \
 | `--permission-mode` | 权限模式（信任/审阅/严格） |
 | `--replay-user-messages` | 回显用户消息 |
 
-**版本兼容**：Mac 助手启动时执行 `claude --version`，与内置 `compatibleRange`（如 `>=1.0.0,<2.0.0`）比对。不兼容则拒绝启动并输出提示：
-
-```
-claude-phone-agent: Claude Code 版本 2.1.0 不兼容 (需要 >=1.0.0,<2.0.0)
-请升级 claude-phone-agent 或降级 Claude Code CLI
-```
+**版本探测**：Mac 助手启动时执行 `<claude-bin> --version`，无法执行或无法解析版本时
+拒绝启动；探测到的版本通过 hello 与本地诊断页展示。CLI 的 stream-json 格式由
+translate 层和回归样例做兼容，不使用容易过期的硬编码主版本上限。
 
 **并发会话上限**：默认最多 5 个同时运行的 claude 进程（可通过 `~/.claude-phone/config.yaml` 的 `maxConcurrentSessions` 调整）。超过上限时 `create_session` 返回错误 `SESSION_LIMIT_REACHED`。
 

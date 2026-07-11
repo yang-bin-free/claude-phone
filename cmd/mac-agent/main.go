@@ -35,6 +35,11 @@ func runServe(args []string) {
 	if err != nil {
 		log.Fatal(err)
 	}
+	version, err := engine.DetectClaudeVersion(cfg.ClaudeBin)
+	if err != nil {
+		log.Fatalf("Claude CLI check failed: %v", err)
+	}
+	cfg.ClaudeVersion = version
 
 	e := engine.New(cfg)
 	if network.Enabled() {

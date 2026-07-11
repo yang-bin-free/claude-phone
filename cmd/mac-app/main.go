@@ -34,6 +34,10 @@ func main() {
 	if err := validateDesktopAddr(*desktopAddr); err != nil {
 		log.Fatal(err)
 	}
+	claudeVersion, err := engine.DetectClaudeVersion(*claudeBin)
+	if err != nil {
+		log.Fatalf("Claude CLI check failed: %v", err)
+	}
 	token, err := generateAdminToken()
 	if err != nil {
 		log.Fatal(err)
@@ -45,7 +49,7 @@ func main() {
 
 	e := engine.New(engine.Config{
 		Addr: *desktopAddr, ClaudeBin: *claudeBin, DefaultWorkingDir: *workdir,
-		DefaultPermission: *permission, DataDir: *dataDir,
+		DefaultPermission: *permission, DataDir: *dataDir, ClaudeVersion: claudeVersion,
 		DeviceTokens: map[string]string{"desktop-" + token: "Mac"},
 	})
 	handler := desktop.NewHandler(e.Handler(), e.AdminHandler(token))
