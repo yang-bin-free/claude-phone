@@ -1,0 +1,82 @@
+// Package session 管理 Claude Phone 的会话生命周期、订阅者扇出与 claude 子进程驱动。
+package session
+
+import "sync"
+
+// SenderFunc 把 payload 发给某个设备（由 WS 层注入，测试可替换）。
+type SenderFunc func(deviceID string, payload []byte)
+
+// Session 表示一个 claude 会话及其订阅者。
+type Session struct {
+	ID        string
+	Name      string
+	Cwd       string
+	Owner     string
+	Status    string // active | dormant | stopped
+	CreatedAt int64
+
+	mu     sync.RWMutex
+	subs   map[string]struct{}
+	sender SenderFunc
+}
+
+// NewSession 创建会话，owner 自动成为首个订阅者。
+func NewSession(id, name, cwd, owner string) *Session {
+	return &Session{
+		ID:     id,
+		Name:   name,
+		Cwd:    cwd,
+		Owner:  owner,
+		Status: "active",
+		subs:   map[string]struct{}{owner: {}},
+	}
+}
+
+// SetSender 注入发送回调。
+func (s *Session) SetSender(fn SenderFunc) {
+	s.mu.Lock()
+	s.sender = fn
+	s.mu.Unlock()
+}
+
+// Subscribe 把设备加入订阅者集合。
+func (s *Session) Subscribe(deviceID string) {
+	s.mu.Lock()
+	s.subs[deviceID] = struct{}{}
+	s.mu.Unlock()
+}
+
+// Unsubscribe 把设备移出订阅者集合。
+func (s *Session) Unsubscribe(deviceID string) {
+	s.mu.Lock()
+	delete(s.subs, deviceID)
+	s.mu.Unlock()
+}
+
+// Subscribers 返回当前订阅者设备 ID 列表（快照）。
+func (s *Session) Subscribers() []string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	out := make([]string, 0, len(s.subs))
+	for id := range s.subs {
+		out = append(out, id)
+	}
+	return out
+}
+
+// Broadcast 把 payload 扇出给所有订阅者。
+func (s *Session) Broadcast(payload []byte) {
+	s.mu.RLock()
+	sender := s.sender
+	ids := make([]string, 0, len(s.subs))
+	for id := range s.subs {
+		ids = append(ids, id)
+	}
+	s.mu.RUnlock()
+	if sender == nil {
+		return
+	}
+	for _, id := range ids {
+		sender(id, payload)
+	}
+}

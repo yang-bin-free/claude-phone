@@ -149,6 +149,29 @@ claude-phone/                       ← github.com/yang-bin-free/claude-phone
 └── scripts/build.sh                ← gomobile bind + gradle assemble
 ```
 
+### Android 构建入口
+
+Android 工程固定使用 Gradle Wrapper 8.1 和 JDK 17+，不要直接运行全局 `gradle`，否则可能命中本机旧版 Gradle/JDK。
+
+```bash
+cd android
+./build-android.sh assembleDebug
+```
+
+`build-android.sh` 会优先选择 Homebrew 的 `openjdk@17`，再调用项目内 `./gradlew`。
+默认复用已有 `build/claudelib.aar`；需要重建 Go AAR 时执行：
+
+```bash
+REBUILD_AAR=1 ./build-android.sh assembleDebug
+```
+
+`REBUILD_AAR=1` 会调用 `scripts/build-android-aar.sh`。该脚本包含一个很窄的
+gomobile 兼容绕过：当前 x/mobile 的 `gomobile bind` 会在临时 ABI 目录写入
+0 字节 `go.mod`，Go 1.26 会拒绝这个文件。脚本只在 gomobile 临时目录中拦截
+`go mod tidy`，补一个临时合法 `go.mod` 并 `replace` 回本仓库；普通 `go build`
+/ `go test` 不受影响。等 x/mobile 修复或项目改用 patched gomobile 后可以删除
+这段绕过。
+
 ### 依赖与许可证
 
 | 依赖 | 用途 | 许可证 |

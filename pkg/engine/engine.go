@@ -1,0 +1,92 @@
+package engine
+
+import (
+	"errors"
+	"net"
+	"net/http"
+	"sync"
+
+	"github.com/yang-bin-free/claude-phone/pkg/session"
+)
+
+type claudeProc interface {
+	OnOutput(session.OutputFunc)
+	Start() error
+	Send(string) error
+	Stop() error
+}
+
+type ClaudeFactory func(session.ClaudeConfig) claudeProc
+
+type Engine struct {
+	cfg     Config
+	manager *session.Manager
+	factory ClaudeFactory
+	server  *http.Server
+
+	mu      sync.RWMutex
+	clients map[string]*client
+	procs   map[string]claudeProc
+}
+
+func New(cfg Config) *Engine {
+	cfg = cfg.withDefaults()
+	e := &Engine{
+		cfg:     cfg,
+		manager: session.NewManager(session.ManagerConfig{MaxConcurrent: cfg.MaxConcurrentSession}),
+		clients: map[string]*client{},
+		procs:   map[string]claudeProc{},
+	}
+	e.factory = func(c session.ClaudeConfig) claudeProc { return session.NewClaudeProc(c) }
+	return e
+}
+
+func (e *Engine) SetClaudeFactory(factory ClaudeFactory) {
+	if factory != nil {
+		e.factory = factory
+	}
+}
+
+func (e *Engine) Manager() *session.Manager {
+	return e.manager
+}
+
+func (e *Engine) Handler() http.Handler {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/ws", e.HandleWS)
+	mux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("ok\n"))
+	})
+	return mux
+}
+
+func (e *Engine) ListenAndServe() error {
+	e.server = &http.Server{Addr: e.cfg.Addr, Handler: e.Handler()}
+	err := e.server.ListenAndServe()
+	if errors.Is(err, http.ErrServerClosed) {
+		return nil
+	}
+	return err
+}
+
+func (e *Engine) Serve(ln net.Listener) error {
+	e.server = &http.Server{Handler: e.Handler()}
+	err := e.server.Serve(ln)
+	if errors.Is(err, http.ErrServerClosed) {
+		return nil
+	}
+	return err
+}
+
+func (e *Engine) Close() error {
+	e.mu.Lock()
+	for _, proc := range e.procs {
+		_ = proc.Stop()
+	}
+	e.mu.Unlock()
+	if e.server != nil {
+		return e.server.Close()
+	}
+	return nil
+}
