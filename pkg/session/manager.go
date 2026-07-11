@@ -56,9 +56,15 @@ func NewManager(cfg ManagerConfig) *Manager {
 		cfg.IDFunc = func() string {
 			var b [16]byte
 			if _, err := rand.Read(b[:]); err != nil {
-				return time.Now().Format("20060102150405.000000000")
+				now := time.Now().UnixNano()
+				for i := range b {
+					b[i] = byte(now >> ((i % 8) * 8))
+				}
 			}
-			return "sess-" + hex.EncodeToString(b[:])
+			b[6] = (b[6] & 0x0f) | 0x40
+			b[8] = (b[8] & 0x3f) | 0x80
+			value := hex.EncodeToString(b[:])
+			return value[0:8] + "-" + value[8:12] + "-" + value[12:16] + "-" + value[16:20] + "-" + value[20:32]
 		}
 	}
 	return &Manager{cfg: cfg, byID: map[string]*Session{}}

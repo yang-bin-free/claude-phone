@@ -2,8 +2,20 @@ package session
 
 import (
 	"errors"
+	"regexp"
 	"testing"
 )
+
+func TestManagerDefaultIDIsUUIDv4(t *testing.T) {
+	m := NewManager(ManagerConfig{})
+	s, err := m.Create("demo", ".", "default", "owner")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$`).MatchString(s.ID) {
+		t.Fatalf("session ID is not UUID v4: %q", s.ID)
+	}
+}
 
 func newTestManager(limit int) *Manager {
 	n := 0
