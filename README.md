@@ -225,6 +225,20 @@ VERSION=0.1.0-dev make release
 `SHA256SUMS`。正式公开发布前仍需使用发布者自己的 Apple Developer ID 完成
 codesign/notarization，并使用 Android release keystore 生成 release APK/AAB。
 
+从仓库根目录验证发布包：
+
+```bash
+shasum -a 256 -c build/release/SHA256SUMS
+```
+
+Mac App 开机自启可通过当前可执行文件管理：
+
+```bash
+claude-phone autostart install
+claude-phone autostart status
+claude-phone autostart uninstall
+```
+
 ### 依赖与许可证
 
 | 依赖 | 用途 | 许可证 |
@@ -268,7 +282,7 @@ claude-phone-agent
 │       每个 session: owner + subscribers[] + claude 子进程
 │       清理协程: 每 5 分钟扫描孤儿会话 → 超时 30 分钟 kill
 │
-├── 配置热加载 (fsnotify)
+├── 配置热加载（安全字段轮询）
 │   ├── ~/.claude-phone/projects.yaml    (工作目录)
 │   └── ~/.claude-phone/templates.yaml   (命令模板)
 │
@@ -479,7 +493,7 @@ WebSocket 发给所有订阅者:
 
 ### 4.11 Mac 睡眠策略
 
-- **有活跃会话时**：`caffeinate -s -w <claude-pid>` 阻止系统睡眠（显示器可关）
+- **有活跃会话时**：引擎持有一个 `caffeinate -s` 进程阻止系统睡眠（显示器可关）
 - **无活跃会话时**：允许正常睡眠
 - **Mac 已睡眠时手机请求**：手机显示"Mac 不可用" + 重试按钮（每 30s ping）
 - **Mac 唤醒后**：tsnet 自动重连，WebSocket 恢复，claude 进程若被 kill 则 `--resume`
@@ -492,7 +506,7 @@ WebSocket 发给所有订阅者:
 
 ### 4.12 消息历史
 
-**Mac 端存储**（追加写入，无需锁）：
+**Mac 端存储**（进程内串行追加）：
 
 ```
 ~/.claude-phone/sessions/<sessionId>/
@@ -500,17 +514,9 @@ WebSocket 发给所有订阅者:
 └── messages.jsonl     # 每行一条 JSON
 ```
 
-```jsonl
-{"msgId":"msg001","ts":"2026-07-08T15:30:00Z","dir":"in","type":"text","content":"检查并发安全性"}
-{"msgId":"msg002","ts":"2026-07-08T15:30:02Z","dir":"out","type":"thinking"}
-{"msgId":"msg003","ts":"2026-07-08T15:30:03Z","dir":"out","type":"token","content":"让我先读取"}
-```
-
-- 每条消息有递增 `msgId`，用于增量同步
-- 手机端**轻量本地缓存**：最近 1 个活跃会话的消息缓存到本地，Mac 在线时同步更新，离线时至少能看到缓存内容
-- 进入会话时从 Mac 拉取（`select_session` 返回 `messageCount` + `lastMsgId`，手机再发 `load_history` 拉取最近 N 条），向上滚动懒加载
-- 断线期间的消息：重连后基于 `lastMsgId` 拉取增量
-- 清理：用户手动删除，不自动清理
+`messages.jsonl` 保留原始入站文本与 Claude stream-json 输出。进入会话后客户端通过
+`load_history` 拉取最近 N 条并重放；默认 UI 请求最近 500 条，DOM 同样限制为最近
+500 个消息节点。历史不自动删除。
 
 ### 4.13 断线重连
 
@@ -572,12 +578,11 @@ Agent 自身崩溃（OOM / panic / 被 kill）时：
 # ~/.claude-phone/projects.yaml
 projects:
   - name: "开放平台"
-    paths:
-      - /Users/binyangbin/insurance-project/insurance-open-platform
+    path: /Users/binyangbin/insurance-project/insurance-open-platform
+    permission: default
   - name: "保险大仓"
-    paths:
-      - /Users/binyangbin/insurance-project
-      - /Users/binyangbin/develop
+    path: /Users/binyangbin/insurance-project
+    permission: acceptEdits
 ```
 
 ```yaml
@@ -589,30 +594,23 @@ templates:
     prompt: "Review 当前分支的改动，找出潜在 bug"
 ```
 
-配置修改后通过 `fsnotify` 热加载，无需重启。
+`projects.yaml` 与 `templates.yaml` 每次请求时读取最新内容；`config.yaml` 每秒检查一次。
+以下运行时字段可热更新，无需重启：
+
+```yaml
+defaultWorkingDir: /Users/me/project
+defaultPermission: default
+maxConcurrentSessions: 5
+```
+
+权限规则在 Mac 管理页增删，持久化到 `permission-rules.json`，并通过 Claude CLI
+官方 `--allowedTools` 参数应用到新建或恢复的会话。
 
 ### 4.18 启动与自启
 
-```xml
-<!-- ~/Library/LaunchAgents/com.claude.phone-agent.plist -->
-<plist>
-<dict>
-    <key>Label</key>
-    <string>com.claude.phone-agent</string>
-    <key>ProgramArguments</key>
-    <array>
-        <string>/usr/local/bin/claude-phone-agent</string>
-    </array>
-    <key>RunAtLoad</key><true/>
-    <key>KeepAlive</key><true/>
-    <key>EnvironmentVariables</key>
-    <dict>
-        <key>HOME</key>
-        <string>/Users/binyangbin</string>
-    </dict>
-</dict>
-</plist>
-```
+`claude-phone autostart install` 会生成用户级
+`~/Library/LaunchAgents/com.claude.phone.plist` 并通过 `launchctl bootstrap` 加载；
+卸载与状态查询使用同一命令的 `uninstall` / `status` 子命令。
 
 tsnet 通过 `Dir` 持久化认证状态，不需要在 plist 里放 Auth Key。
 

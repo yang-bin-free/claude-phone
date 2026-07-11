@@ -3,6 +3,7 @@ package engine
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"time"
 
@@ -263,6 +264,8 @@ func (e *Engine) stopSession(s *session.Session) error {
 	delete(e.procs, s.ID)
 	delete(e.activity, s.ID)
 	delete(e.healthState, s.ID)
+	delete(e.queues, s.ID)
+	delete(e.busy, s.ID)
 	idle := len(e.procs) == 0
 	e.mu.Unlock()
 	if idle {
@@ -323,9 +326,7 @@ func (e *Engine) createSession(cl *client, msg protocol.ControlMsg) (string, err
 		AllowedTools: e.permissions.AllowedTools(),
 	})
 	proc.OnOutput(func(payload []byte) {
-		e.recordActivity(s.ID)
-		_ = e.history.Append(s.ID, payload)
-		s.Broadcast(payload)
+		e.handleProcOutput(s, proc, payload)
 	})
 	if err := proc.Start(); err != nil {
 		e.manager.Remove(s.ID)
@@ -364,9 +365,7 @@ func (e *Engine) resumeSession(s *session.Session) error {
 		AllowedTools: e.permissions.AllowedTools(),
 	})
 	proc.OnOutput(func(payload []byte) {
-		e.recordActivity(s.ID)
-		_ = e.history.Append(s.ID, payload)
-		s.Broadcast(payload)
+		e.handleProcOutput(s, proc, payload)
 	})
 	if err := proc.Start(); err != nil {
 		return err
@@ -391,13 +390,33 @@ func (e *Engine) handleText(sessionID string, raw []byte) error {
 	if err := e.history.Append(sessionID, raw); err != nil {
 		return err
 	}
-	e.mu.RLock()
+	e.mu.Lock()
 	proc := e.procs[sessionID]
-	e.mu.RUnlock()
 	if proc == nil {
+		e.mu.Unlock()
 		return session.ErrSessionNotFound
 	}
-	return proc.Send(msg.Content)
+	if e.busy[sessionID] {
+		e.queueSeq++
+		queued := queuedPrompt{ID: fmt.Sprintf("msg-%d", e.queueSeq), Content: msg.Content}
+		e.queues[sessionID] = append(e.queues[sessionID], queued)
+		position := len(e.queues[sessionID])
+		e.mu.Unlock()
+		if s, ok := e.manager.Get(sessionID); ok {
+			payload, _ := json.Marshal(protocol.QueuedMsg{Type: protocol.TypeQueued, MsgID: queued.ID, Position: position})
+			s.Broadcast(payload)
+		}
+		return nil
+	}
+	e.busy[sessionID] = true
+	e.mu.Unlock()
+	if err := proc.Send(msg.Content); err != nil {
+		e.mu.Lock()
+		e.busy[sessionID] = false
+		e.mu.Unlock()
+		return err
+	}
+	return nil
 }
 
 func (e *Engine) sessionList(limit, offset int) protocol.SessionListMsg {

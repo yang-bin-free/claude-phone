@@ -43,6 +43,9 @@ type Engine struct {
 	power       powerInhibitor
 	activity    map[string]time.Time
 	healthState map[string]string
+	queues      map[string][]queuedPrompt
+	busy        map[string]bool
+	queueSeq    uint64
 }
 
 func New(cfg Config) *Engine {
@@ -63,6 +66,8 @@ func New(cfg Config) *Engine {
 		power:       newPowerInhibitor(),
 		activity:    map[string]time.Time{},
 		healthState: map[string]string{},
+		queues:      map[string][]queuedPrompt{},
+		busy:        map[string]bool{},
 	}
 	e.factory = func(c session.ClaudeConfig) claudeProc { return session.NewClaudeProc(c) }
 	if persisted, err := e.history.Restore(); err == nil {

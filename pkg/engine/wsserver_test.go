@@ -325,6 +325,7 @@ func mustControl(t *testing.T, v protocol.ControlMsg) []byte {
 
 type stubClaudeProc struct {
 	stopCalls int
+	sent      []string
 }
 
 type stubPowerInhibitor struct {
@@ -339,7 +340,7 @@ func (p *stubPowerInhibitor) Active() bool   { return p.active }
 
 func (p *stubClaudeProc) OnOutput(session.OutputFunc) {}
 func (p *stubClaudeProc) Start() error                { return nil }
-func (p *stubClaudeProc) Send(string) error           { return nil }
+func (p *stubClaudeProc) Send(value string) error     { p.sent = append(p.sent, value); return nil }
 func (p *stubClaudeProc) Stop() error {
 	p.stopCalls++
 	return nil

@@ -157,6 +157,11 @@
             connection.textContent = msg.state === "healthy" ? "已连接" : (msg.state === "stalled" ? "会话可能卡住" : "会话无响应");
           }
           break;
+        case "queued":
+          append("queued", `已排队（第 ${msg.position} 条）`);
+          break;
+        case "dequeued":
+          break;
         case "thinking":
           state.assistantChunk = null;
           break;

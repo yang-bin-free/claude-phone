@@ -178,6 +178,17 @@ type HealthMsg struct {
 	IdleSeconds int64  `json:"idleSeconds"`
 }
 
+type QueuedMsg struct {
+	Type     string `json:"type"`
+	MsgID    string `json:"msgId"`
+	Position int    `json:"position"`
+}
+
+type DequeuedMsg struct {
+	Type  string `json:"type"`
+	MsgID string `json:"msgId"`
+}
+
 type HistoryMsg struct {
 	Type      string            `json:"type"`
 	SessionID string            `json:"sessionId"`
