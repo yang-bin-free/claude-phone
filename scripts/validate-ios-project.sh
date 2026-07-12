@@ -32,6 +32,7 @@ done
 plutil -lint ios/ClaudePhone.xcodeproj/project.pbxproj >/dev/null
 
 grep -q 'IPHONEOS_DEPLOYMENT_TARGET = 18.0' ios/Config/Base.xcconfig
+grep -q 'iOS 18 SDK is required' scripts/build-ios-framework.sh
 grep -q 'APP_GROUP_IDENTIFIER' ios/Config/Base.xcconfig
 grep -q 'ClaudePhoneTunnel' ios/ClaudePhone.xcodeproj/project.pbxproj
 grep -q 'com.apple.networkextension.packet-tunnel' ios/ClaudePhoneTunnel/Info.plist
