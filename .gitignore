@@ -9,6 +9,7 @@ android/local.properties
 
 # IDE / Claude
 .claude/
+.worktrees/
 
 # OS
 .DS_Store
