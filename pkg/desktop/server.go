@@ -1,16 +1,39 @@
 package desktop
 
 import (
+	"encoding/json"
 	"io/fs"
 	"net/http"
 
 	webassets "github.com/yang-bin-free/claude-phone/web"
 )
 
-func NewHandler(engineHandler, adminHandler http.Handler) http.Handler {
+type AppStatus struct {
+	Ready         bool   `json:"ready"`
+	Paused        bool   `json:"paused"`
+	ClaudeBin     string `json:"claudeBin,omitempty"`
+	ClaudeVersion string `json:"claudeVersion,omitempty"`
+	Error         string `json:"error,omitempty"`
+}
+
+type HandlerOptions struct {
+	EngineHandler func() http.Handler
+	AdminHandler  func() http.Handler
+	Status        func() AppStatus
+}
+
+func NewHandler(options HandlerOptions) http.Handler {
 	mux := http.NewServeMux()
-	mux.Handle("/ws", engineHandler)
-	mux.Handle("/admin/", adminHandler)
+	mux.Handle("/ws", availableHandler(options.EngineHandler))
+	mux.Handle("/admin/", availableHandler(options.AdminHandler))
+	mux.HandleFunc("GET /desktop/status", func(w http.ResponseWriter, _ *http.Request) {
+		status := AppStatus{}
+		if options.Status != nil {
+			status = options.Status()
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(status)
+	})
 	mux.HandleFunc("/", serveAsset("chat/index.html", "text/html"))
 	mux.HandleFunc("/assets/chat.js", serveAsset("chat/chat.js", "text/javascript"))
 	mux.HandleFunc("/assets/admin.js", serveAsset("admin/admin.js", "text/javascript"))
@@ -19,6 +42,21 @@ func NewHandler(engineHandler, adminHandler http.Handler) http.Handler {
 	mux.HandleFunc("/assets/mobile.css", serveAsset("chat/mobile.css", "text/css"))
 	mux.HandleFunc("/assets/admin.css", serveAsset("admin/admin.css", "text/css"))
 	return mux
+}
+
+func availableHandler(provider func() http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if provider == nil {
+			http.Error(w, "desktop engine unavailable", http.StatusServiceUnavailable)
+			return
+		}
+		handler := provider()
+		if handler == nil {
+			http.Error(w, "desktop engine unavailable", http.StatusServiceUnavailable)
+			return
+		}
+		handler.ServeHTTP(w, r)
+	})
 }
 
 func serveAsset(name, contentType string) http.HandlerFunc {

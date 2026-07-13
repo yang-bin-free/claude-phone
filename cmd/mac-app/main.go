@@ -15,7 +15,6 @@ import (
 	"syscall"
 
 	"github.com/yang-bin-free/claude-phone/pkg/desktop"
-	"github.com/yang-bin-free/claude-phone/pkg/engine"
 )
 
 func main() {
@@ -34,44 +33,31 @@ func main() {
 	if err := validateDesktopAddr(*desktopAddr); err != nil {
 		log.Fatal(err)
 	}
-	claudeVersion, err := engine.DetectClaudeVersion(*claudeBin)
-	if err != nil {
-		log.Fatalf("Claude CLI check failed: %v", err)
-	}
 	token, err := generateAdminToken()
 	if err != nil {
 		log.Fatal(err)
 	}
-	listener, err := net.Listen("tcp", *desktopAddr)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	e := engine.New(engine.Config{
-		Addr: *desktopAddr, ClaudeBin: *claudeBin, DefaultWorkingDir: *workdir,
-		DefaultPermission: *permission, DataDir: *dataDir, ClaudeVersion: claudeVersion,
-		DeviceTokens: map[string]string{"desktop-" + token: "Mac"},
-	})
-	handler := desktop.NewHandler(e.Handler(), e.AdminHandler(token))
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	defer e.Close()
+	app := newApplication(ctx, appConfig{
+		DesktopAddr: *desktopAddr, ClaudeBin: *claudeBin, DefaultWorkdir: *workdir,
+		DefaultPermission: *permission, DataDir: *dataDir, AdminToken: token,
+	}, appDependencies{})
+	if err := app.Start(); err != nil {
+		log.Fatal(err)
+	}
+	defer app.Close()
 
-	baseURL := "http://" + listener.Addr().String() + "/"
-	pageURL, err := desktop.URLWithAdminToken(baseURL, token)
+	pageURL, err := desktop.URLWithAdminToken(app.BaseURL(), token)
 	if err != nil {
 		log.Fatal(err)
 	}
-	serverDone := make(chan error, 1)
-	go func() { serverDone <- desktop.Serve(ctx, listener, handler) }()
-	log.Printf("Claude Phone desktop service listening on %s", baseURL)
+	log.Printf("Claude Phone desktop service listening on %s", app.BaseURL())
 	if err := desktop.RunNative(ctx, pageURL, desktop.Commands{Quit: stop}); err != nil {
 		stop()
 		log.Print(err)
 	}
-	if err := <-serverDone; err != nil {
-		log.Fatal(err)
-	}
+	stop()
 }
 
 func runAutostart(args []string) {
