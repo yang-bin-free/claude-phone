@@ -13,6 +13,15 @@
 @end
 
 static char cpWindowDelegateKey;
+static char cpReopenWindowKey;
+
+static BOOL cpApplicationShouldHandleReopen(id self, SEL _cmd, NSApplication *sender, BOOL hasVisibleWindows) {
+    NSWindow *window = objc_getAssociatedObject(self, &cpReopenWindowKey);
+    if (window != nil) {
+        cpShowWindow((__bridge void *)window);
+    }
+    return YES;
+}
 
 void cpConfigureWindow(void *windowPtr) {
     NSWindow *window = (__bridge NSWindow *)windowPtr;
@@ -20,6 +29,15 @@ void cpConfigureWindow(void *windowPtr) {
     window.delegate = delegate;
     window.releasedWhenClosed = NO;
     objc_setAssociatedObject(window, &cpWindowDelegateKey, delegate, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+
+    id appDelegate = NSApp.delegate;
+    if (appDelegate != nil) {
+        objc_setAssociatedObject(appDelegate, &cpReopenWindowKey, window, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        class_addMethod(object_getClass(appDelegate),
+                        @selector(applicationShouldHandleReopen:hasVisibleWindows:),
+                        (IMP)cpApplicationShouldHandleReopen,
+                        "c@:@c");
+    }
 }
 
 void cpShowWindow(void *windowPtr) {
