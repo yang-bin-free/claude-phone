@@ -361,7 +361,7 @@ func (e *Engine) resumeSession(s *session.Session) error {
 	}
 	proc := e.factory(session.ClaudeConfig{
 		Bin: e.cfg.ClaudeBin, Cwd: s.Cwd, SessionID: s.ID, Permission: s.Permission,
-		AddDirs: []string{s.Cwd}, Resume: true,
+		AddDirs: []string{s.Cwd}, Resume: e.sessionExists(s.Cwd, s.ID),
 		AllowedTools: e.permissions.AllowedTools(),
 	})
 	proc.OnOutput(func(payload []byte) {

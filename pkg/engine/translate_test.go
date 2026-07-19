@@ -3,6 +3,8 @@ package engine
 import (
 	"encoding/json"
 	"testing"
+
+	"github.com/yang-bin-free/claude-phone/pkg/protocol"
 )
 
 func TestTranslateClaudeStreamEvents(t *testing.T) {
@@ -24,6 +26,34 @@ func TestTranslateClaudeStreamEvents(t *testing.T) {
 		if got.Type != tt.wantType || got.Content != tt.wantContent {
 			t.Fatalf("got %+v want type=%s content=%s", got, tt.wantType, tt.wantContent)
 		}
+	}
+}
+
+func TestTranslateClaudeErrorFallsBackToErrorsArray(t *testing.T) {
+	got := translateClaudeOutput([]byte(`{"type":"result","is_error":true,"result":"","errors":["No conversation found with session ID: abc"]}`))
+	if len(got) != 1 {
+		t.Fatalf("translated error = %q", got)
+	}
+	var message protocol.ErrorMsg
+	if err := json.Unmarshal(got[0], &message); err != nil {
+		t.Fatal(err)
+	}
+	if message.Code != "CLAUDE_ERROR" || message.Message != "No conversation found with session ID: abc" {
+		t.Fatalf("translated error = %+v", message)
+	}
+}
+
+func TestTranslateClaudeErrorNeverProducesEmptyMessage(t *testing.T) {
+	got := translateClaudeOutput([]byte(`{"type":"result","is_error":true}`))
+	if len(got) != 1 {
+		t.Fatalf("translated error = %q", got)
+	}
+	var message protocol.ErrorMsg
+	if err := json.Unmarshal(got[0], &message); err != nil {
+		t.Fatal(err)
+	}
+	if message.Message == "" {
+		t.Fatal("translated Claude error message is empty")
 	}
 }
 

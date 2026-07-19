@@ -21,10 +21,11 @@ type claudeProc interface {
 type ClaudeFactory func(session.ClaudeConfig) claudeProc
 
 type Engine struct {
-	cfg     Config
-	manager *session.Manager
-	factory ClaudeFactory
-	server  *http.Server
+	cfg           Config
+	manager       *session.Manager
+	factory       ClaudeFactory
+	sessionExists func(string, string) bool
+	server        *http.Server
 
 	mu          sync.RWMutex
 	resumeMu    sync.Mutex
@@ -51,23 +52,24 @@ type Engine struct {
 func New(cfg Config) *Engine {
 	cfg = cfg.withDefaults()
 	e := &Engine{
-		cfg:         cfg,
-		manager:     session.NewManager(session.ManagerConfig{MaxConcurrent: cfg.MaxConcurrentSession}),
-		clients:     map[string]*client{},
-		procs:       map[string]claudeProc{},
-		projects:    newProjectStore(cfg.DataDir),
-		devices:     newDeviceStore(cfg.DataDir),
-		history:     newHistoryStore(cfg.DataDir),
-		permissions: newPermissionStore(cfg.DataDir),
-		templates:   newTemplateStore(cfg.DataDir),
-		startedAt:   time.Now(),
-		runtime:     runtimeConfig{DefaultWorkingDir: cfg.DefaultWorkingDir, DefaultPermission: cfg.DefaultPermission, MaxConcurrentSessions: cfg.MaxConcurrentSession},
-		stopWatch:   make(chan struct{}),
-		power:       newPowerInhibitor(),
-		activity:    map[string]time.Time{},
-		healthState: map[string]string{},
-		queues:      map[string][]queuedPrompt{},
-		busy:        map[string]bool{},
+		cfg:           cfg,
+		manager:       session.NewManager(session.ManagerConfig{MaxConcurrent: cfg.MaxConcurrentSession}),
+		clients:       map[string]*client{},
+		procs:         map[string]claudeProc{},
+		projects:      newProjectStore(cfg.DataDir),
+		devices:       newDeviceStore(cfg.DataDir),
+		history:       newHistoryStore(cfg.DataDir),
+		permissions:   newPermissionStore(cfg.DataDir),
+		templates:     newTemplateStore(cfg.DataDir),
+		startedAt:     time.Now(),
+		runtime:       runtimeConfig{DefaultWorkingDir: cfg.DefaultWorkingDir, DefaultPermission: cfg.DefaultPermission, MaxConcurrentSessions: cfg.MaxConcurrentSession},
+		sessionExists: session.ClaudeSessionExists,
+		stopWatch:     make(chan struct{}),
+		power:         newPowerInhibitor(),
+		activity:      map[string]time.Time{},
+		healthState:   map[string]string{},
+		queues:        map[string][]queuedPrompt{},
+		busy:          map[string]bool{},
 	}
 	e.factory = func(c session.ClaudeConfig) claudeProc { return session.NewClaudeProc(c) }
 	if persisted, err := e.history.Restore(); err == nil {

@@ -2,16 +2,18 @@ package engine
 
 import (
 	"encoding/json"
+	"strings"
 
 	"github.com/yang-bin-free/claude-phone/pkg/protocol"
 )
 
 func translateClaudeOutput(payload []byte) [][]byte {
 	var raw struct {
-		Type    string `json:"type"`
-		Subtype string `json:"subtype"`
-		IsError bool   `json:"is_error"`
-		Result  string `json:"result"`
+		Type    string   `json:"type"`
+		Subtype string   `json:"subtype"`
+		IsError bool     `json:"is_error"`
+		Result  string   `json:"result"`
+		Errors  []string `json:"errors"`
 		Event   struct {
 			Type         string                      `json:"type"`
 			Delta        struct{ Type, Text string } `json:"delta"`
@@ -44,7 +46,20 @@ func translateClaudeOutput(payload []byte) [][]byte {
 		}
 	case "result":
 		if raw.IsError {
-			return marshalTranslated(protocol.NewError("CLAUDE_ERROR", raw.Result))
+			message := strings.TrimSpace(raw.Result)
+			if message == "" {
+				parts := make([]string, 0, len(raw.Errors))
+				for _, item := range raw.Errors {
+					if item = strings.TrimSpace(item); item != "" {
+						parts = append(parts, item)
+					}
+				}
+				message = strings.Join(parts, "; ")
+			}
+			if message == "" {
+				message = "Claude exited with an unspecified error"
+			}
+			return marshalTranslated(protocol.NewError("CLAUDE_ERROR", message))
 		}
 		return marshalTranslated(protocol.DoneMsg{Type: protocol.TypeDone})
 	}

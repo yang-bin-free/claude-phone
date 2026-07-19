@@ -18,7 +18,7 @@ func TestEngineCloseDisconnectsWebSocketClients(t *testing.T) {
 	e := New(Config{DataDir: t.TempDir(), DeviceTokens: map[string]string{"device": "Mac"}})
 	ts := httptest.NewServer(e.Handler())
 	defer ts.Close()
-	conn, _, err := websocket.DefaultDialer.Dial("ws"+ts.URL[len("http"):] + "/ws", nil)
+	conn, _, err := websocket.DefaultDialer.Dial("ws"+ts.URL[len("http"):]+"/ws", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -187,6 +187,39 @@ func TestRemoveClientDoesNotRemoveReplacementConnection(t *testing.T) {
 	e.mu.RUnlock()
 	if got != newClient {
 		t.Fatalf("replacement connection was removed: got %p want %p", got, newClient)
+	}
+}
+
+func TestResumeSessionUsesTranscriptPresence(t *testing.T) {
+	for _, tt := range []struct {
+		name       string
+		exists     bool
+		wantResume bool
+	}{
+		{name: "missing starts fresh", exists: false, wantResume: false},
+		{name: "present resumes", exists: true, wantResume: true},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			e := New(Config{DataDir: t.TempDir()})
+			defer e.Close()
+			e.sessionExists = func(cwd, id string) bool { return tt.exists }
+			s := session.NewSession("4e2858dd-c712-4f0e-9818-c05191acf107", "Mac 会话", "/work", "owner")
+			s.Permission = "acceptEdits"
+			s.SetStatus("dormant")
+			e.manager.Restore(s)
+			var captured session.ClaudeConfig
+			e.SetClaudeFactory(func(cfg session.ClaudeConfig) claudeProc {
+				captured = cfg
+				return &stubClaudeProc{}
+			})
+
+			if err := e.resumeSession(s); err != nil {
+				t.Fatal(err)
+			}
+			if captured.Resume != tt.wantResume {
+				t.Fatalf("Resume=%v, want %v", captured.Resume, tt.wantResume)
+			}
+		})
 	}
 }
 
