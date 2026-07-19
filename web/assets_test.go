@@ -86,3 +86,15 @@ func TestAuthorizationFailuresUseSingletonBannerInsteadOfChatHistory(t *testing.
 		}
 	}
 }
+
+func TestStoppedSessionRestoresEngineConnectionLabel(t *testing.T) {
+	jsBytes, err := fs.ReadFile(Assets, "chat/chat.js")
+	if err != nil {
+		t.Fatal(err)
+	}
+	js := string(jsBytes)
+	marker := `connection.textContent = state.connected ? "已连接" : "重新连接中"`
+	if !strings.Contains(js, marker) {
+		t.Fatalf("stopped-session connection reset missing %q", marker)
+	}
+}

@@ -255,6 +255,7 @@
           state.sessionId = "";
           state.sessionReady = false;
           updateControls();
+          connection.textContent = state.connected ? "已连接" : "重新连接中";
           document.querySelector("#view-title").textContent = "新会话";
           document.querySelector("#stop-session").disabled = true;
           messages.replaceChildren(Object.assign(document.createElement("p"), { className: "empty", textContent: "会话已停止。" }));
