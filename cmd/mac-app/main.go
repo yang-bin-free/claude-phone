@@ -53,7 +53,16 @@ func main() {
 		log.Fatal(err)
 	}
 	log.Printf("Claude Phone desktop service listening on %s", app.BaseURL())
-	commands := desktop.Commands{
+	commands := newNativeCommands(app, stop)
+	if err := desktop.RunNative(ctx, pageURL, commands); err != nil {
+		stop()
+		log.Print(err)
+	}
+	stop()
+}
+
+func newNativeCommands(app *application, stop context.CancelFunc) desktop.Commands {
+	return desktop.Commands{
 		States: app.MenuStates(),
 		Pause:  app.Pause,
 		Resume: app.Resume,
@@ -67,13 +76,11 @@ func main() {
 			}
 			return desktop.InstallAutostart(executable, nil)
 		},
-		Quit: stop,
+		Quit: func() {
+			_ = app.Close()
+			stop()
+		},
 	}
-	if err := desktop.RunNative(ctx, pageURL, commands); err != nil {
-		stop()
-		log.Print(err)
-	}
-	stop()
 }
 
 func runAutostart(args []string) {

@@ -42,3 +42,13 @@ func TestMenuPresentationFailed(t *testing.T) {
 		t.Fatalf("presentation=%+v", got)
 	}
 }
+
+func TestShutdownNativeClosesResourcesBeforeTerminatingWindow(t *testing.T) {
+	var events []string
+	shutdownNative(Commands{Quit: func() { events = append(events, "close") }}, func() {
+		events = append(events, "terminate")
+	})
+	if len(events) != 2 || events[0] != "close" || events[1] != "terminate" {
+		t.Fatalf("shutdown order=%v", events)
+	}
+}

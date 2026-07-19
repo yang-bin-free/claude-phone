@@ -103,6 +103,29 @@ func TestApplicationCloseIsIdempotent(t *testing.T) {
 	}
 }
 
+func TestNativeQuitClosesEngineAndCancelsContext(t *testing.T) {
+	instance := &fakeManagedEngine{}
+	app := newApplication(context.Background(), appConfig{DesktopAddr: "127.0.0.1:0", ClaudeBin: "claude", AdminToken: "token"}, appDependencies{
+		resolveClaude: func(string) (string, error) { return "/tmp/claude", nil },
+		detectVersion: func(string) (string, error) { return "1.2.3", nil },
+		newEngine:     func(engine.Config) managedEngine { return instance },
+	})
+	if err := app.Start(); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	commands := newNativeCommands(app, cancel)
+	commands.Quit()
+	if !instance.closed.Load() {
+		t.Fatal("native quit returned before the engine closed")
+	}
+	select {
+	case <-ctx.Done():
+	default:
+		t.Fatal("native quit did not cancel the application context")
+	}
+}
+
 func assertAppHTTPStatus(t *testing.T, handler http.Handler, path string, want int) {
 	t.Helper()
 	w := httptest.NewRecorder()

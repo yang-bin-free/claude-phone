@@ -68,3 +68,10 @@ func URLWithAdminToken(baseURL, token string) (string, error) {
 func RunNative(ctx context.Context, pageURL string, commands Commands) error {
 	return runNative(ctx, pageURL, commands)
 }
+
+func shutdownNative(commands Commands, terminate func()) {
+	if commands.Quit != nil {
+		commands.Quit()
+	}
+	terminate()
+}

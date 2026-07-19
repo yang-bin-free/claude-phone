@@ -121,8 +121,10 @@ func runNative(ctx context.Context, pageURL string, commands Commands) error {
 	go func() {
 		select {
 		case <-ctx.Done():
-			window.Terminate()
-			systray.Quit()
+			shutdownNative(commands, func() {
+				window.Terminate()
+				systray.Quit()
+			})
 		case <-done:
 		}
 	}()
