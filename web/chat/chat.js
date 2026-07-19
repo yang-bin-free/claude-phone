@@ -315,7 +315,9 @@
     if (session) selectSession(session.sessionId, session.name);
   });
   document.querySelector("#stop-session").addEventListener("click", () => {
-    if (state.sessionId) send({ type: "control", action: "stop_session", sessionId: state.sessionId });
+    if (state.sessionId && window.confirm("确认停止当前会话？未完成的输出会中断。")) {
+      send({ type: "control", action: "stop_session", sessionId: state.sessionId });
+    }
   });
   document.querySelector("#open-settings").addEventListener("click", () => {
     if (window.AndroidBridge?.openSettings) AndroidBridge.openSettings();

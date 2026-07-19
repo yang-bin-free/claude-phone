@@ -64,3 +64,27 @@ func TestDesktopThemeUsesWarmAccentAndMacSizedControls(t *testing.T) {
 		t.Error("legacy generic-purple accent is still active")
 	}
 }
+
+func TestDesktopDestructiveActionsRequireConfirmation(t *testing.T) {
+	adminBytes, err := fs.ReadFile(Assets, "admin/admin.js")
+	if err != nil {
+		t.Fatal(err)
+	}
+	admin := string(adminBytes)
+	for _, marker := range []string{
+		"confirmDangerousAction", "确认吊销这个设备", "确认删除这个工作目录",
+		"确认删除这个提示词模板", "确认删除这条权限规则", "确认停止这个会话",
+	} {
+		if !strings.Contains(admin, marker) {
+			t.Errorf("admin destructive flow missing %q", marker)
+		}
+	}
+
+	chatBytes, err := fs.ReadFile(Assets, "chat/chat.js")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(chatBytes), "确认停止当前会话") {
+		t.Error("chat session stop does not ask for confirmation")
+	}
+}

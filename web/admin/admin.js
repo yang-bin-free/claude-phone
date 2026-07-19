@@ -2,6 +2,9 @@
   function run(action) {
     Promise.resolve().then(action).catch(error => feedback(error.message, true));
   }
+  function confirmDangerousAction(message, action) {
+    if (window.confirm(message)) run(action);
+  }
   async function refresh() {
     const token = window.claudePhone.adminToken;
     const response = await fetch("/admin/status", { headers: { Authorization: `Bearer ${token}` } });
@@ -28,7 +31,7 @@
       const revoke = document.createElement("button");
       revoke.className = "quiet danger";
       revoke.textContent = "吊销";
-      revoke.addEventListener("click", () => run(() => revokeDevice(device.deviceId)));
+      revoke.addEventListener("click", () => confirmDangerousAction("确认吊销这个设备？设备需要重新配对才能连接。", () => revokeDevice(device.deviceId)));
       row.append(label, revoke);
       deviceList.append(row);
     });
@@ -43,7 +46,7 @@
       const remove = document.createElement("button");
       remove.className = "quiet danger";
       remove.textContent = "删除";
-      remove.addEventListener("click", () => run(() => deleteProject(project.projectId)));
+      remove.addEventListener("click", () => confirmDangerousAction("确认删除这个工作目录？", () => deleteProject(project.projectId)));
       row.append(label, remove);
       projectList.append(row);
     });
@@ -62,7 +65,7 @@
       const remove = document.createElement("button");
       remove.className = "quiet danger";
       remove.textContent = "删除";
-      remove.addEventListener("click", () => run(() => deleteTemplate(template.templateId)));
+      remove.addEventListener("click", () => confirmDangerousAction("确认删除这个提示词模板？", () => deleteTemplate(template.templateId)));
       row.append(copy, remove);
       templateList.append(row);
     });
@@ -77,7 +80,7 @@
       const remove = document.createElement("button");
       remove.className = "quiet danger";
       remove.textContent = "删除";
-      remove.addEventListener("click", () => run(() => deletePermissionRule(rule.ruleId)));
+      remove.addEventListener("click", () => confirmDangerousAction("确认删除这条权限规则？", () => deletePermissionRule(rule.ruleId)));
       row.append(label, remove);
       permissionList.append(row);
     });
@@ -103,7 +106,7 @@
       const stop = document.createElement("button");
       stop.className = "quiet danger";
       stop.textContent = "停止";
-      stop.addEventListener("click", () => run(() => stopSession(session.sessionId)));
+      stop.addEventListener("click", () => confirmDangerousAction("确认停止这个会话？未完成的输出会中断。", () => stopSession(session.sessionId)));
       row.append(copy, stop);
       list.append(row);
     });
