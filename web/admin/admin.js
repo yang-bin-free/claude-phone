@@ -13,7 +13,7 @@
       ["运行时间", `${diagnostics.uptimeSeconds}s`], ["内存", `${Math.round(diagnostics.allocBytes / 1048576)} MB`],
       ["Goroutine", diagnostics.goroutines], ["平台", `${diagnostics.goos}/${diagnostics.goarch}`],
       ["防睡眠", diagnostics.caffeinating ? "已启用" : "空闲"]
-    ].map(([label, value]) => `<article><span>${label}</span><strong>${value}</strong></article>`).join("");
+    ].map(([label, value]) => `<div class="metric-item"><span>${label}</span><strong>${value}</strong></div>`).join("");
     document.querySelector("#settings-workdir").value = agent.defaultWorkingDir || "";
     document.querySelector("#settings-permission").value = agent.defaultPermission || "default";
     document.querySelector("#settings-concurrency").value = agent.maxConcurrentSession || 5;

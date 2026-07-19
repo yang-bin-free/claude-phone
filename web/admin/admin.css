@@ -1,8 +1,9 @@
 .admin-view { padding: 26px; overflow: auto; }
-.metric-grid { display: grid; grid-template-columns: repeat(4, minmax(130px, 1fr)); gap: 14px; }
-.metric-grid article { background: #1c2028; border: 1px solid #2d3340; border-radius: 12px; padding: 16px; }
-.metric-grid span { display: block; color: #9099aa; font-size: 12px; margin-bottom: 9px; }
-.metric-grid strong { font-size: 20px; }
+.metric-summary { display: flex; flex-wrap: wrap; gap: 0; border: 1px solid #2d3340; border-radius: 12px; background: #171a21; margin-bottom: 24px; padding: 10px 4px; }
+.metric-item { min-width: 124px; flex: 1 1 124px; padding: 4px 14px; border-right: 1px solid #2d3340; }
+.metric-item:last-child { border-right: 0; }
+.metric-item span { display: block; color: #9099aa; font-size: 11px; margin-bottom: 5px; }
+.metric-item strong { font-size: 15px; font-weight: 650; }
 #admin-sessions { background: #171a21; border-radius: 12px; padding: 8px 14px; color: #aeb5c5; }
 #admin-devices, #admin-permissions, #admin-templates { background: #171a21; border-radius: 12px; padding: 8px 14px; color: #aeb5c5; }
 .device-row, .project-row, .permission-row, .template-row, .session-admin-row { min-height: 44px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #282d38; gap: 12px; }
