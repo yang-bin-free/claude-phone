@@ -17,6 +17,13 @@ func TestClaudeProcIncludesAllowedTools(t *testing.T) {
 	}
 }
 
+func TestClaudeProcStreamJSONEnablesVerbose(t *testing.T) {
+	args := NewClaudeProc(ClaudeConfig{SessionID: "s", Permission: "default"}).buildArgs()
+	if !slices.Contains(args, "--verbose") {
+		t.Fatalf("stream-json args missing required --verbose: %v", args)
+	}
+}
+
 func TestClaudeProc_StreamsTokens(t *testing.T) {
 	proc := NewClaudeProc(ClaudeConfig{
 		Bin:        "../../testdata/fake-claude.sh",
