@@ -12,6 +12,8 @@
 #admin-projects { background: #171a21; border-radius: 12px; padding: 8px 14px; color: #aeb5c5; }
 #project-form, #permission-form, #template-form { display: grid; grid-template-columns: 160px minmax(240px, 1fr) auto; gap: 10px; margin-bottom: 10px; }
 #device-form { display: flex; gap: 10px; margin-bottom: 10px; }
+#project-form label, #device-form label, #permission-form label, #template-form label { color: #9099aa; display: grid; font-size: 12px; gap: 6px; }
+#project-form button, #device-form button, #permission-form button, #template-form button { align-self: end; min-height: 39px; }
 #project-form input, #device-form input, #permission-form input, #template-form input, #template-form textarea, #settings-form input, #settings-form select { border: 1px solid #343a48; border-radius: 9px; background: #1b1e26; color: inherit; padding: 10px; }
 #template-form textarea { min-height: 72px; resize: vertical; }
 .settings-form { display: grid; grid-template-columns: minmax(260px, 1fr) 160px 140px auto; gap: 10px; align-items: end; }

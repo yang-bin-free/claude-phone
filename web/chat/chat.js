@@ -35,6 +35,7 @@
   function showChat() {
     chat.hidden = false;
     admin.hidden = true;
+    document.body.classList.toggle("admin-mode", false);
     document.querySelector("#show-admin").classList.remove("active");
     if (platform === "desktop") prompt.focus();
   }
@@ -43,6 +44,7 @@
     if (platform === "mobile") return;
     chat.hidden = true;
     admin.hidden = false;
+    document.body.classList.toggle("admin-mode", true);
     document.querySelector("#show-admin").classList.add("active");
     document.querySelector("#view-title").textContent = "管理与诊断";
     if (window.claudePhone.refreshAdmin) {

@@ -13,3 +13,4 @@ android/local.properties
 
 # OS
 .DS_Store
+.gstack/

@@ -7,6 +7,7 @@
 .workspace { display: grid; grid-template-rows: 58px minmax(0, 1fr); min-width: 0; position: relative; }
 header { border-bottom: 1px solid #2a2e39; display: flex; align-items: center; justify-content: space-between; padding: 0 22px; }
 .header-actions { display: flex; gap: 6px; }
+.admin-mode .header-actions { visibility: hidden; pointer-events: none; }
 .header-actions select { max-width: 150px; border: 1px solid #343a48; border-radius: 8px; background: #20242d; color: inherit; padding: 7px; }
 #open-settings { display: none; }
 #stop-session:disabled { opacity: .4; cursor: default; }

@@ -42,18 +42,18 @@
         </form>
         <p id="admin-feedback" class="admin-feedback" role="status"></p>
         <h2>设备</h2>
-        <form id="device-form"><input id="device-name" placeholder="设备名称，例如 Pixel"><button class="primary">生成 Device Token</button></form>
+        <form id="device-form"><label for="device-name">设备名称<input id="device-name" placeholder="例如 Pixel"></label><button class="primary">生成 Device Token</button></form>
         <pre id="new-device-token" hidden></pre>
         <div id="admin-devices"></div>
         <h2>工作目录</h2>
-        <form id="project-form"><input id="project-name" placeholder="名称"><input id="project-path" placeholder="绝对路径" required><button class="primary">添加</button></form>
+        <form id="project-form"><label for="project-name">名称<input id="project-name" placeholder="例如 主项目"></label><label for="project-path">绝对路径<input id="project-path" placeholder="/Users/me/project" required></label><button class="primary">添加</button></form>
         <div id="admin-projects"></div>
         <h2>提示词模板</h2>
-        <form id="template-form" class="admin-form"><input id="template-label" placeholder="名称" required><textarea id="template-prompt" placeholder="提示词内容" required></textarea><button class="primary">添加</button></form>
+        <form id="template-form" class="admin-form"><label for="template-label">名称<input id="template-label" placeholder="例如 检查改动" required></label><label for="template-prompt">提示词内容<textarea id="template-prompt" placeholder="输入可复用的提示词" required></textarea></label><button class="primary">添加</button></form>
         <div id="admin-templates"></div>
         <h2>权限规则</h2>
         <p>规则会通过 Claude CLI 官方的 allowedTools 机制应用到新建或恢复的会话。</p>
-        <form id="permission-form"><input id="permission-tool" placeholder="工具，例如 Bash" required><input id="permission-pattern" placeholder="模式，例如 git status:*"><button class="primary">始终允许</button></form>
+        <form id="permission-form"><label for="permission-tool">工具<input id="permission-tool" placeholder="例如 Bash" required></label><label for="permission-pattern">命令模式<input id="permission-pattern" placeholder="例如 git status:*"></label><button class="primary">始终允许</button></form>
         <div id="admin-permissions"></div>
         <h2>活跃会话</h2><div id="admin-sessions" class="admin-list"></div>
       </section>
