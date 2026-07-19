@@ -7,6 +7,7 @@ import (
 	"net"
 	"net/http"
 	"sync"
+	"time"
 
 	"github.com/yang-bin-free/claude-phone/pkg/desktop"
 	"github.com/yang-bin-free/claude-phone/pkg/engine"
@@ -50,6 +51,7 @@ type application struct {
 	handler     http.Handler
 	listener    net.Listener
 	serverDone  chan error
+	menuStates  chan desktop.MenuState
 	closeOnce   sync.Once
 	closeErr    error
 }
@@ -71,7 +73,7 @@ func newApplication(parent context.Context, cfg appConfig, deps appDependencies)
 		deps.serve = desktop.Serve
 	}
 	ctx, cancel := context.WithCancel(parent)
-	app := &application{cfg: cfg, deps: deps, ctx: ctx, cancel: cancel, serverDone: make(chan error, 1)}
+	app := &application{cfg: cfg, deps: deps, ctx: ctx, cancel: cancel, serverDone: make(chan error, 1), menuStates: make(chan desktop.MenuState, 1)}
 	app.handler = desktop.NewHandler(desktop.HandlerOptions{
 		EngineHandler: app.engineHandler,
 		AdminHandler:  app.adminHandler,
@@ -96,6 +98,7 @@ func (a *application) Start() error {
 
 	go func() { a.serverDone <- a.deps.serve(a.ctx, listener, a.handler) }()
 	_ = a.Resume()
+	go a.publishMenuState()
 	return nil
 }
 
@@ -113,11 +116,13 @@ func (a *application) Resume() error {
 	bin, err := a.deps.resolveClaude(a.cfg.ClaudeBin)
 	if err != nil {
 		a.setUnavailable(err, false)
+		a.emitMenuState()
 		return err
 	}
 	version, err := a.deps.detectVersion(bin)
 	if err != nil {
 		a.setUnavailable(fmt.Errorf("Claude CLI check failed: %w", err), false)
+		a.emitMenuState()
 		return err
 	}
 	instance := a.deps.newEngine(engine.Config{
@@ -133,6 +138,7 @@ func (a *application) Resume() error {
 	a.engine = instance
 	a.status = desktop.AppStatus{Ready: true, ClaudeBin: bin, ClaudeVersion: version}
 	a.mu.Unlock()
+	a.emitMenuState()
 	return nil
 }
 
@@ -145,8 +151,11 @@ func (a *application) Pause() error {
 	a.status = desktop.AppStatus{Paused: true}
 	a.mu.Unlock()
 	if instance != nil {
-		return instance.Close()
+		err := instance.Close()
+		a.emitMenuState()
+		return err
 	}
+	a.emitMenuState()
 	return nil
 }
 
@@ -170,6 +179,8 @@ func (a *application) Close() error {
 }
 
 func (a *application) Handler() http.Handler { return a.handler }
+
+func (a *application) MenuStates() <-chan desktop.MenuState { return a.menuStates }
 
 func (a *application) BaseURL() string {
 	a.lifecycleMu.Lock()
@@ -218,4 +229,43 @@ func (a *application) setUnavailable(err error, paused bool) {
 	a.mu.Lock()
 	a.status = desktop.AppStatus{Paused: paused, Error: err.Error()}
 	a.mu.Unlock()
+}
+
+func (a *application) publishMenuState() {
+	ticker := time.NewTicker(5 * time.Second)
+	defer ticker.Stop()
+	a.emitMenuState()
+	for {
+		select {
+		case <-a.ctx.Done():
+			return
+		case <-ticker.C:
+			a.emitMenuState()
+		}
+	}
+}
+
+func (a *application) emitMenuState() {
+	status := a.Status()
+	state := desktop.MenuState{
+		Ready: status.Ready, Paused: status.Paused, StatusText: status.Error,
+		Autostart: desktop.AutostartEnabled(),
+	}
+	if status.Ready {
+		report := a.EngineStatus()
+		state.Devices = len(report.ConnectedDevices)
+		state.Sessions = len(report.Sessions)
+	}
+	select {
+	case a.menuStates <- state:
+	default:
+		select {
+		case <-a.menuStates:
+		default:
+		}
+		select {
+		case a.menuStates <- state:
+		default:
+		}
+	}
 }

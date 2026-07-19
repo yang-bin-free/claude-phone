@@ -18,3 +18,27 @@ func TestURLWithAdminTokenUsesFragment(t *testing.T) {
 		t.Fatalf("url=%q", got)
 	}
 }
+
+func TestMenuPresentationRunning(t *testing.T) {
+	got := menuPresentation(MenuState{Ready: true, Devices: 2, Sessions: 3, Autostart: true})
+	if got.Status != "引擎运行中" || got.Devices != "在线设备：2" || got.Sessions != "活跃会话：3" {
+		t.Fatalf("presentation=%+v", got)
+	}
+	if !got.PauseEnabled || got.ResumeEnabled || !got.Autostart {
+		t.Fatalf("presentation=%+v", got)
+	}
+}
+
+func TestMenuPresentationPaused(t *testing.T) {
+	got := menuPresentation(MenuState{Paused: true})
+	if got.Status != "引擎已暂停" || got.PauseEnabled || !got.ResumeEnabled {
+		t.Fatalf("presentation=%+v", got)
+	}
+}
+
+func TestMenuPresentationFailed(t *testing.T) {
+	got := menuPresentation(MenuState{StatusText: "找不到 Claude CLI"})
+	if got.Status != "引擎异常 · 找不到 Claude CLI" || !got.ResumeEnabled || got.PauseEnabled {
+		t.Fatalf("presentation=%+v", got)
+	}
+}
