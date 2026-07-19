@@ -420,3 +420,16 @@ Expected:
 - `git status --short` is empty after the final commit.
 - The seven-item real macOS acceptance pass is recorded with no failures.
 
+## Delivery Record — 2026-07-19
+
+Mac V1 functional acceptance passed all seven checks on a real macOS `.app` bundle:
+
+1. Finder-style minimal `PATH` discovered Claude Code 2.1.212 from NVM.
+2. A missing CLI produced an actionable in-window banner without terminating the desktop host.
+3. A fake-Claude session streamed `hello world` and persisted its history.
+4. Closing the window hid it while the loopback service and menu-bar item remained active.
+5. Show/Hide, Pause/Resume, Diagnostics, Autostart, and Quit were exercised through the actual menu-bar item.
+6. Projects, templates, permission rules, sessions, and message history survived relaunch.
+7. Quit removed the Claude child and `caffeinate` process with no orphan processes.
+
+The bundle is versioned, icon-complete, verified, and ad-hoc signed for local execution. Developer ID signing and notarization remain separate release-credential work for public distribution.

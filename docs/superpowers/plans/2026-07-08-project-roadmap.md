@@ -8,9 +8,9 @@
 
 ## 1. 当前状态快照
 
-- **已完成**：P0a；P0b Android Tailscale AAR/VpnService 桥；P1/P2 引擎核心与可靠性；Mac 桌面本地管理 API、共享聊天 UI、原生 WebView；Android WebView/语音/配对；干净克隆构建与发布包校验。
+- **已完成**：P0a；P0b Android Tailscale AAR/VpnService 桥；P1/P2 引擎核心与可靠性；**Mac V1 桌面 App（Finder 启动、菜单栏、聊天、管理、持久化、打包与真实验收）**；Android WebView/语音/配对；干净克隆构建与发布包校验。
 - **进行中（线 A）**：P0c 实机跨网络验收，等待 Android 设备与有效 Tailscale Auth Key。
-- **已实现待验证（线 B）**：Mac 桌面 GUI 的真实窗口/菜单栏行为；Android 真机 VPN；iOS 18 Xcode 签名构建、Packet Tunnel 与跨 tailnet 联调。
+- **已实现待验证**：Android 真机 VPN；iOS 18 Xcode 签名构建、Packet Tunnel 与跨 tailnet 联调。
 
 ## 2. 两条并行线
 
@@ -81,8 +81,8 @@ Mac（线 B）与 Android（线 A）共享 `web/chat` 的**逻辑层 + 结构层
 ## 7. 本会话（线 B）的下一步
 
 1. Android 设备与 Auth Key 就绪后执行 **M2（P0c）** 实机联调。
-2. 在非沙箱 macOS 桌面验证菜单栏、关窗隐藏和优雅退出。
-3. 配置发布者签名凭据后完成 Mac 公证和 Android release 签名。
+2. Mac V1 功能验收已完成；配置发布者签名凭据后完成 Developer ID 签名与 Apple 公证。
+3. 配置 Android release keystore，生成正式 APK/AAB。
 
 ## 8. 未纳入当前规划（V2+，README §8）
 

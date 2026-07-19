@@ -10,7 +10,7 @@
 
 **最终体验**：
 - 手机：只安装 **1 个 App**（Android APK / iOS IPA）
-- Mac：只运行 **1 个二进制**（GUI `claude-phone` 或无头 `claude-phone-agent`）+ Claude Code CLI
+- Mac：只安装 **1 个原生 App**（或使用无头 `claude-phone-agent`）+ Claude Code CLI
 - 不需要装 Tailscale App、不需要装 SSH 客户端、不需要配置端口映射、不需要记忆 IP 地址
 - **多台手机可同时连接同一台 Mac**，各自独立操作，也可共享会话
 
@@ -74,9 +74,9 @@
 | **Go 核心** | 原生 Go 二进制 | gomobile → .aar | gomobile → .framework |
 | **共享代码** | `pkg/protocol` + `pkg/session` | 同左 | 同左 |
 | **Tailscale 接入** | `tsnet.Server{}` | VpnService + `ipnlocal.LocalBackend` + tun fd | NetworkExtension + `ipnlocal.LocalBackend` + tun fd |
-| **UI 层** | — | WebView (HTML/CSS/JS) | SwiftUI 原生 |
+| **UI 层** | Cocoa/WebKit + 菜单栏 | WebView (HTML/CSS/JS) | SwiftUI 原生 |
 | **语音输入** | — | Web Speech API | SFSpeechRecognizer |
-| **构建产出** | 单二进制 | APK | IPA |
+| **构建产出** | `Claude Phone.app` / ZIP | APK | IPA |
 | **分发** | GitHub Release | GitHub Release / 直装 | TestFlight / App Store |
 
 ### 2.3 为什么全 Go
@@ -214,16 +214,18 @@ go build -o claude-phone ./cmd/mac-app
 交给 WebView，不会进入 HTTP 请求或日志。原生窗口、菜单栏常驻和“关窗只隐藏”
 生命周期已实现。无 GUI 环境继续使用 `claude-phone-agent`。
 
-构建可分发目录（未签名、未公证）：
+构建可分发目录（ad-hoc 签名、未公证）：
 
 ```bash
-make android-apk
-VERSION=0.1.0-dev make release
+VERSION=0.1.0-dev make mac-release
+open "build/Claude Phone.app"
 ```
 
-产物位于 `build/release/`，包含 Mac `.app` ZIP、Android APK、许可证文件和
-`SHA256SUMS`。正式公开发布前仍需使用发布者自己的 Apple Developer ID 完成
-codesign/notarization，并使用 Android release keystore 生成 release APK/AAB。
+Mac 产物位于 `build/release/`，包含 `.app` ZIP、许可证文件和 `SHA256SUMS`。
+构建脚本会生成完整 `AppIcon.icns`、注入版本号、执行 bundle 校验并添加本机可运行的
+ad-hoc 签名。正式公开发布前仍需使用发布者自己的 Apple Developer ID 替换为
+Developer ID 签名并完成 notarization。需要同时打包 Android 时再运行
+`make android-apk && VERSION=0.1.0-dev make release`。
 
 从仓库根目录验证发布包：
 
@@ -238,6 +240,20 @@ claude-phone autostart install
 claude-phone autostart status
 claude-phone autostart uninstall
 ```
+
+#### Mac V1 验收记录（2026-07-19）
+
+以下项目已在真实 `.app` bundle 上逐项通过：
+
+1. 使用 Finder 风格的最小 `PATH` 启动，成功发现 NVM 安装的 Claude Code 2.1.212。
+2. 指向不存在的 Claude CLI 时，窗口保持可用并展示可操作诊断。
+3. 使用 fake Claude 创建会话，界面收到流式 `hello world`，历史同步落盘。
+4. 关闭窗口只隐藏窗口，服务和菜单栏继续运行。
+5. 菜单栏显示/隐藏、暂停/恢复、打开诊断、开机自启切换和退出均实际点测通过。
+6. 重启后工作目录、提示词模板、权限规则和会话历史均恢复。
+7. 退出会停止 Claude 子进程并释放 `caffeinate`，无孤儿进程。
+
+功能验收已完成；Developer ID 签名和 Apple 公证属于公开分发凭据工作，不影响本地使用。
 
 ### 依赖与许可证
 

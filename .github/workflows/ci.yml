@@ -19,7 +19,7 @@ jobs:
       - run: go test ./...
       - run: go test -race ./pkg/engine
       - run: go build ./cmd/mac-agent ./cmd/mac-app
-      - run: ./scripts/build-mac-app.sh
+      - run: VERSION=0.1.0-ci make mac-app verify-mac-app
       - run: node --check web/chat/chat.js && node --check web/admin/admin.js
       - name: Validate iOS source project
         run: make ios-validate

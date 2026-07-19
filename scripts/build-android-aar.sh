@@ -13,6 +13,15 @@ if [[ -z "${ANDROID_HOME:-}" && -f android/local.properties ]]; then
 fi
 
 if [[ -z "${ANDROID_HOME:-}" ]]; then
+  for sdk_dir in "${HOME}/Library/Android/sdk" "${HOME}/Android/Sdk"; do
+    if [[ -d "${sdk_dir}" ]]; then
+      export ANDROID_HOME="${sdk_dir}"
+      break
+    fi
+  done
+fi
+
+if [[ -z "${ANDROID_HOME:-}" ]]; then
   echo "ANDROID_HOME is required. Set it or create android/local.properties with sdk.dir=..." >&2
   exit 1
 fi
