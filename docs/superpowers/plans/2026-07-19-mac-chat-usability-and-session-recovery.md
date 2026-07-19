@@ -4,7 +4,7 @@
 
 **Goal:** Make every chat message copyable, make Return send safely, and transparently recover persisted sessions whose Claude CLI transcript is missing.
 
-**Architecture:** The session package detects Claude transcript presence under the active Claude configuration directory. The engine injects that query and only passes `Resume: true` when the transcript exists; output translation preserves Claude's `errors[]`. The web layer uses native text selection and a composition-safe key handler.
+**Architecture:** The session package detects Claude transcript presence under the active Claude configuration directory. The engine injects that query and only passes `Resume: true` when the transcript exists; output translation preserves Claude's `errors[]`. The web layer uses native text selection, a clipboard action with a WKWebView-safe fallback, and a composition-safe key handler.
 
 **Tech Stack:** Go 1.24, Claude Code CLI 2.1.212, embedded vanilla JavaScript/CSS, WebSocket protocol, Cocoa WebView.
 
@@ -13,7 +13,7 @@
 - Preserve all existing Claude Phone history; do not delete or migrate user data.
 - Use `CLAUDE_CONFIG_DIR` when set and `~/.claude` otherwise.
 - Return sends, Shift+Return inserts a newline, and IME composition Return never sends.
-- All message roles support native selection and `⌘C`; do not add clipboard permissions or copy buttons.
+- All message roles support native selection and expose a reliable copy button with a no-permission fallback.
 - Every production change starts with a failing regression test.
 
 ---
@@ -212,7 +212,7 @@ git add pkg/engine/engine.go pkg/engine/wsserver.go pkg/engine/wsserver_test.go 
 git commit -m "fix(engine): recover missing Claude sessions"
 ```
 
-### Task 3: Enable native copy and Return-to-send
+### Task 3: Enable reliable copy and Return-to-send
 
 **Files:**
 - Modify: `web/chat/desktop.css`
@@ -220,8 +220,8 @@ git commit -m "fix(engine): recover missing Claude sessions"
 - Modify: `web/design_regression_test.go`
 
 **Interfaces:**
-- Consumes: native WebView selection, textarea keydown events and `composer.requestSubmit()`.
-- Produces: selectable `.message` elements and composition-safe Return submission.
+- Consumes: native WebView selection, Clipboard API/fallback copy, textarea keydown events and `composer.requestSubmit()`.
+- Produces: selectable `.message` elements, per-message copy actions, and composition-safe Return submission.
 
 - [ ] **Step 1: Write failing web asset tests**
 
@@ -264,6 +264,8 @@ Change the message rule to include:
 ```
 
 Remove the narrower assistant/tool-only selection rule.
+
+Add an accessible copy button to each rendered message. Use `navigator.clipboard.writeText` when available and fall back to a temporary selected textarea plus `document.execCommand("copy")` when WKWebView rejects the Clipboard API.
 
 - [ ] **Step 4: Implement the key handler**
 
@@ -318,7 +320,7 @@ Against an isolated fake-Claude data directory:
 1. Create a session.
 2. Fill `第一行`, press Shift+Return, type `第二行`, and assert no user message was sent yet.
 3. Press Return and assert exactly one user message containing both lines and exactly one `hello world` response.
-4. Select message text and assert `window.getSelection().toString()` matches the selected content.
+4. Click the assistant message copy action and assert the system clipboard exactly matches the message content.
 5. Assert browser console errors/warnings are empty.
 
 - [ ] **Step 4: Reproduce the user's restored-session path with real Claude**

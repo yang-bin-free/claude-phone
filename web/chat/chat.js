@@ -67,15 +67,63 @@
     setPrompt(value) { prompt.value = value || ""; prompt.focus(); }
   };
 
+  function legacyCopy(text) {
+    const area = document.createElement("textarea");
+    area.value = text;
+    area.setAttribute("readonly", "");
+    area.style.position = "fixed";
+    area.style.opacity = "0";
+    document.body.append(area);
+    area.select();
+    area.setSelectionRange(0, area.value.length);
+    const copied = document.execCommand("copy");
+    area.remove();
+    if (!copied) throw new Error("copy command was rejected");
+  }
+
+  async function writeClipboard(text) {
+    if (navigator.clipboard?.writeText) {
+      try {
+        await navigator.clipboard.writeText(text);
+        return;
+      } catch (_) {
+        // WKWebView may expose Clipboard API while denying it; use the user-gesture fallback.
+      }
+    }
+    legacyCopy(text);
+  }
+
+  function copyButton(content) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "message-copy";
+    button.setAttribute("aria-label", "复制消息");
+    button.title = "复制消息";
+    button.addEventListener("click", async event => {
+      event.stopPropagation();
+      try {
+        await writeClipboard(content.textContent);
+        button.dataset.copied = "true";
+        window.setTimeout(() => { delete button.dataset.copied; }, 1500);
+      } catch (_) {
+        showBanner("复制失败，请选择文本后按 ⌘C。");
+      }
+    });
+    return button;
+  }
+
   function append(role, text) {
     messages.querySelector(".empty")?.remove();
     const node = document.createElement("div");
     node.className = `message ${role}`;
-    node.textContent = text;
+    const content = document.createElement("span");
+    content.className = "message-content";
+    content.textContent = text;
+    node.append(content, copyButton(content));
     messages.append(node);
     while (messages.children.length > 500) messages.firstElementChild?.remove();
     messages.scrollTop = messages.scrollHeight;
-    return node;
+    return content;
   }
 
   function flushTokens() {

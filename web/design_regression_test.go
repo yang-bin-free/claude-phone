@@ -124,9 +124,27 @@ func TestDesktopMessagesAreSelectable(t *testing.T) {
 		t.Fatal(err)
 	}
 	css := string(cssBytes)
-	marker := ".message { max-width: 78%; margin: 0 0 16px; padding: 12px 15px; border-radius: 14px; white-space: pre-wrap; user-select: text; cursor: text; }"
+	marker := ".message { position: relative; max-width: 78%; margin: 0 0 16px; padding: 12px 64px 12px 15px; border-radius: 14px; white-space: pre-wrap; user-select: text; cursor: text; }"
 	if !strings.Contains(css, marker) {
 		t.Fatalf("message selection rule missing %q", marker)
+	}
+}
+
+func TestDesktopMessagesExposeCopyAction(t *testing.T) {
+	jsBytes, err := fs.ReadFile(Assets, "chat/chat.js")
+	if err != nil {
+		t.Fatal(err)
+	}
+	js := string(jsBytes)
+	for _, marker := range []string{
+		`button.className = "message-copy"`,
+		`button.setAttribute("aria-label", "复制消息")`,
+		`await writeClipboard(content.textContent)`,
+		`document.execCommand("copy")`,
+	} {
+		if !strings.Contains(js, marker) {
+			t.Errorf("message copy action missing %q", marker)
+		}
 	}
 }
 

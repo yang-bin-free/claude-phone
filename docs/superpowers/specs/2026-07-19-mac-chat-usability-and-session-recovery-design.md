@@ -4,7 +4,7 @@
 
 Fix three Mac V1 failures reported from the installed application:
 
-1. Every rendered chat message must support native text selection and `⌘C` copying.
+1. Every rendered chat message must support native text selection and a reliable per-message copy action.
 2. Return sends, Shift+Return inserts a newline, and IME composition Return never sends.
 3. Selecting a persisted Claude Phone session whose Claude CLI transcript no longer exists must start a usable replacement process instead of invoking a guaranteed-to-fail `--resume`.
 
@@ -26,7 +26,7 @@ The output translator also reads Claude's `errors[]`; when `result` is empty it 
 
 ### Copy behavior
 
-Apply `user-select: text` and a text cursor to every `.message` bubble, including user, assistant, tool, queued, and error messages. Native WebView selection and the standard macOS Copy command remain the only copy mechanism; no custom clipboard permission or message button is introduced.
+Apply `user-select: text` and a text cursor to every `.message` bubble, including user, assistant, tool, queued, and error messages. Each bubble also gets an accessible hover/focus copy button. The button first uses the Clipboard API and falls back to a temporary selected textarea plus `execCommand("copy")`, covering WKWebView environments where the exposed Clipboard API is denied. A short in-place “已复制” state confirms success without changing message text.
 
 ### Keyboard behavior
 
@@ -44,12 +44,11 @@ The prompt key handler submits on Return when Shift is not pressed. It calls `pr
 1. Session transcript lookup tests cover default/configured roots, present and missing UUIDs.
 2. Engine resume tests capture `ClaudeConfig` and assert `Resume` is false for a missing transcript and true for a present transcript.
 3. Translator tests assert `errors[]` becomes a non-empty `CLAUDE_ERROR` message.
-4. Web asset regression tests assert selectable message CSS and Return/Shift+Return/IME guards.
-5. Browser E2E verifies selection text, Return submission, Shift+Return newline, and exact single response.
+4. Web asset regression tests assert selectable message CSS, the copy action/fallback, and Return/Shift+Return/IME guards.
+5. Browser E2E verifies clipboard contents, Return submission, Shift+Return newline, and exact single response.
 6. Installed-app E2E reuses the currently failing persisted session, sends `你好`, receives a real Claude response, then audits child-process cleanup.
 
 ## Non-goals
 
-- Per-message copy buttons.
 - Deleting or migrating the user's existing Claude Phone history.
 - Reactive process restart and automatic replay for arbitrary mid-turn Claude crashes.
