@@ -141,8 +141,9 @@ type ProjectListMsg struct {
 }
 
 type TemplateInfo struct {
-	Label  string `json:"label"`
-	Prompt string `json:"prompt"`
+	TemplateID string `json:"templateId,omitempty" yaml:"-"`
+	Label      string `json:"label" yaml:"label"`
+	Prompt     string `json:"prompt" yaml:"prompt"`
 }
 
 type TemplateListMsg struct {

@@ -6,7 +6,7 @@
     const token = window.claudePhone.adminToken;
     const response = await fetch("/admin/status", { headers: { Authorization: `Bearer ${token}` } });
     if (!response.ok) throw new Error(`admin status ${response.status}`);
-    const { agent, devices, projects, diagnostics, permissionRules } = await response.json();
+    const { agent, devices, projects, diagnostics, permissionRules, templates } = await response.json();
     document.querySelector("#metrics").innerHTML = [
       ["在线设备", agent.connectedDevices?.length || 0], ["活跃会话", agent.sessions?.length || 0],
       ["Agent", agent.agentVersion], ["Claude", agent.claudeVersion],
@@ -14,7 +14,10 @@
       ["Goroutine", diagnostics.goroutines], ["平台", `${diagnostics.goos}/${diagnostics.goarch}`],
       ["防睡眠", diagnostics.caffeinating ? "已启用" : "空闲"]
     ].map(([label, value]) => `<article><span>${label}</span><strong>${value}</strong></article>`).join("");
-    document.querySelector("#admin-sessions").textContent = agent.sessions?.length ? JSON.stringify(agent.sessions, null, 2) : "暂无活跃会话";
+    document.querySelector("#settings-workdir").value = agent.defaultWorkingDir || "";
+    document.querySelector("#settings-permission").value = agent.defaultPermission || "default";
+    document.querySelector("#settings-concurrency").value = agent.maxConcurrentSession || 5;
+    renderSessions(agent.sessions || []);
     const deviceList = document.querySelector("#admin-devices");
     deviceList.replaceChildren();
     (devices || []).forEach(device => {
@@ -45,6 +48,25 @@
       projectList.append(row);
     });
     if (!projects?.length) projectList.textContent = "尚未配置工作目录";
+    const templateList = document.querySelector("#admin-templates");
+    templateList.replaceChildren();
+    (templates || []).forEach(template => {
+      const row = document.createElement("div");
+      row.className = "template-row";
+      const copy = document.createElement("div");
+      const label = document.createElement("strong");
+      label.textContent = template.label;
+      const prompt = document.createElement("p");
+      prompt.textContent = template.prompt;
+      copy.append(label, prompt);
+      const remove = document.createElement("button");
+      remove.className = "quiet danger";
+      remove.textContent = "删除";
+      remove.addEventListener("click", () => deleteTemplate(template.templateId));
+      row.append(copy, remove);
+      templateList.append(row);
+    });
+    if (!templates?.length) templateList.textContent = "尚未配置提示词模板";
     const permissionList = document.querySelector("#admin-permissions");
     permissionList.replaceChildren();
     (permissionRules || []).forEach(rule => {
@@ -60,6 +82,32 @@
       permissionList.append(row);
     });
     if (!permissionRules?.length) permissionList.textContent = "尚未记忆权限规则";
+  }
+  function feedback(message, isError = false) {
+    const node = document.querySelector("#admin-feedback");
+    node.textContent = message;
+    node.classList.toggle("error", isError);
+  }
+  function renderSessions(sessions) {
+    const list = document.querySelector("#admin-sessions");
+    list.replaceChildren();
+    sessions.forEach(session => {
+      const row = document.createElement("div");
+      row.className = "session-admin-row";
+      const copy = document.createElement("div");
+      const name = document.createElement("strong");
+      name.textContent = session.name || session.sessionId;
+      const meta = document.createElement("p");
+      meta.textContent = `${session.health || "idle"} · ${session.running ? "运行中" : "空闲"} · ${session.subscribers?.length || 0} 个订阅者`;
+      copy.append(name, meta);
+      const stop = document.createElement("button");
+      stop.className = "quiet danger";
+      stop.textContent = "停止";
+      stop.addEventListener("click", () => stopSession(session.sessionId));
+      row.append(copy, stop);
+      list.append(row);
+    });
+    if (!sessions.length) list.textContent = "暂无活跃会话";
   }
   async function revokeDevice(deviceId) {
     const response = await fetch(`/admin/devices/${encodeURIComponent(deviceId)}`, {
@@ -83,6 +131,55 @@
     if (!response.ok) throw new Error(`delete permission rule ${response.status}`);
     await refresh();
   }
+  async function deleteTemplate(templateId) {
+    const response = await fetch(`/admin/templates/${encodeURIComponent(templateId)}`, {
+      method: "DELETE", headers: { Authorization: `Bearer ${window.claudePhone.adminToken}` }
+    });
+    if (!response.ok) throw new Error(`delete template ${response.status}`);
+    feedback("模板已删除");
+    await refresh();
+  }
+  async function stopSession(sessionId) {
+    const response = await fetch("/admin/sessions/stop", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${window.claudePhone.adminToken}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ sessionId })
+    });
+    if (!response.ok) throw new Error(await response.text());
+    feedback("会话已停止");
+    await refresh();
+  }
+  document.querySelector("#settings-form").addEventListener("submit", async event => {
+    event.preventDefault();
+    try {
+      const response = await fetch("/admin/settings", {
+        method: "PATCH",
+        headers: { Authorization: `Bearer ${window.claudePhone.adminToken}`, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          defaultWorkingDir: document.querySelector("#settings-workdir").value.trim(),
+          defaultPermission: document.querySelector("#settings-permission").value,
+          maxConcurrentSessions: Number(document.querySelector("#settings-concurrency").value)
+        })
+      });
+      if (!response.ok) throw new Error(await response.text());
+      feedback("运行设置已保存");
+      await refresh();
+    } catch (error) { feedback(error.message, true); }
+  });
+  document.querySelector("#template-form").addEventListener("submit", async event => {
+    event.preventDefault();
+    try {
+      const response = await fetch("/admin/templates", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${window.claudePhone.adminToken}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ label: document.querySelector("#template-label").value.trim(), prompt: document.querySelector("#template-prompt").value.trim() })
+      });
+      if (!response.ok) throw new Error(await response.text());
+      event.target.reset();
+      feedback("模板已添加");
+      await refresh();
+    } catch (error) { feedback(error.message, true); }
+  });
   document.querySelector("#project-form").addEventListener("submit", async event => {
     event.preventDefault();
     const response = await fetch("/admin/projects", {

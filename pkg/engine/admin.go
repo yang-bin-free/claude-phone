@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/yang-bin-free/claude-phone/pkg/adminproto"
+	"github.com/yang-bin-free/claude-phone/pkg/protocol"
 )
 
 const maxAdminBodyBytes = 64 << 10
@@ -25,9 +26,55 @@ func (e *Engine) AdminHandler(token string) http.Handler {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
+		templates, err := e.templates.List()
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
 		writeAdminJSON(w, http.StatusOK, adminproto.Snapshot{
-			Agent: adminStatus(e.Status()), Devices: e.adminDevices(), Projects: projects, Diagnostics: e.diagnostics(), PermissionRules: e.permissions.List(),
+			Agent: adminStatus(e.Status()), Devices: e.adminDevices(), Projects: projects, Diagnostics: e.diagnostics(),
+			PermissionRules: e.permissions.List(), Templates: adminTemplates(templates),
 		})
+	})
+	mux.HandleFunc("PATCH /admin/settings", func(w http.ResponseWriter, r *http.Request) {
+		var request adminproto.UpdateSettingsRequest
+		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxAdminBodyBytes)).Decode(&request); err != nil {
+			http.Error(w, "invalid request", http.StatusBadRequest)
+			return
+		}
+		if err := e.updateRuntimeConfig(runtimeConfig{
+			DefaultWorkingDir: request.DefaultWorkingDir, DefaultPermission: request.DefaultPermission,
+			MaxConcurrentSessions: request.MaxConcurrentSessions,
+		}); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	})
+	mux.HandleFunc("POST /admin/templates", func(w http.ResponseWriter, r *http.Request) {
+		var request adminproto.Template
+		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxAdminBodyBytes)).Decode(&request); err != nil {
+			http.Error(w, "invalid request", http.StatusBadRequest)
+			return
+		}
+		created, err := e.templates.Add(protocol.TemplateInfo{Label: request.Label, Prompt: request.Prompt})
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		writeAdminJSON(w, http.StatusCreated, adminTemplate(created))
+	})
+	mux.HandleFunc("DELETE /admin/templates/{templateID}", func(w http.ResponseWriter, r *http.Request) {
+		found, err := e.templates.Delete(r.PathValue("templateID"))
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		if !found {
+			http.Error(w, "template not found", http.StatusNotFound)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
 	})
 	mux.HandleFunc("POST /admin/permission-rules", func(w http.ResponseWriter, r *http.Request) {
 		var rule adminproto.PermissionRule
@@ -240,4 +287,16 @@ func writeAdminJSON(w http.ResponseWriter, status int, value any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(value)
+}
+
+func adminTemplate(item protocol.TemplateInfo) adminproto.Template {
+	return adminproto.Template{TemplateID: item.TemplateID, Label: item.Label, Prompt: item.Prompt}
+}
+
+func adminTemplates(items []protocol.TemplateInfo) []adminproto.Template {
+	result := make([]adminproto.Template, 0, len(items))
+	for _, item := range items {
+		result = append(result, adminTemplate(item))
+	}
+	return result
 }

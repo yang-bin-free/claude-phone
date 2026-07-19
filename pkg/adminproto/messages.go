@@ -7,6 +7,19 @@ type Snapshot struct {
 	Projects        []Project        `json:"projects"`
 	Diagnostics     Diagnostics      `json:"diagnostics"`
 	PermissionRules []PermissionRule `json:"permissionRules"`
+	Templates       []Template       `json:"templates"`
+}
+
+type Template struct {
+	TemplateID string `json:"templateId"`
+	Label      string `json:"label"`
+	Prompt     string `json:"prompt"`
+}
+
+type UpdateSettingsRequest struct {
+	DefaultWorkingDir     string `json:"defaultWorkingDir"`
+	DefaultPermission     string `json:"defaultPermission"`
+	MaxConcurrentSessions int    `json:"maxConcurrentSessions"`
 }
 
 type PermissionRule struct {

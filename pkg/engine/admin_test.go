@@ -128,6 +128,90 @@ func TestAdminHandlerManagesPermissionRules(t *testing.T) {
 	}
 }
 
+func TestAdminHandlerUpdatesRuntimeSettings(t *testing.T) {
+	dataDir := t.TempDir()
+	workDir := t.TempDir()
+	e := New(Config{DataDir: dataDir, DefaultWorkingDir: "/old", DefaultPermission: "default", MaxConcurrentSession: 5})
+	defer e.Close()
+	h := e.AdminHandler("secret")
+	body := `{"defaultWorkingDir":` + mustJSONString(t, workDir) + `,"defaultPermission":"acceptEdits","maxConcurrentSessions":7}`
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, adminRequest(http.MethodPatch, "/admin/settings", body, "secret"))
+	if w.Code != http.StatusNoContent {
+		t.Fatalf("status=%d body=%s", w.Code, w.Body.String())
+	}
+	got := e.Status()
+	if got.DefaultWorkingDir != workDir || got.DefaultPermission != "acceptEdits" || got.MaxConcurrentSession != 7 {
+		t.Fatalf("status=%+v", got)
+	}
+	content, err := os.ReadFile(filepath.Join(dataDir, "config.yaml"))
+	if err != nil || !strings.Contains(string(content), "maxConcurrentSessions: 7") {
+		t.Fatalf("config=%q err=%v", content, err)
+	}
+}
+
+func TestAdminHandlerRejectsInvalidRuntimeSettings(t *testing.T) {
+	e := New(Config{DataDir: t.TempDir(), DefaultWorkingDir: "/old", MaxConcurrentSession: 5})
+	defer e.Close()
+	h := e.AdminHandler("secret")
+	for _, body := range []string{
+		`{"defaultWorkingDir":"relative","defaultPermission":"default","maxConcurrentSessions":5}`,
+		`{"defaultWorkingDir":"/tmp","defaultPermission":"invalid","maxConcurrentSessions":5}`,
+		`{"defaultWorkingDir":"/tmp","defaultPermission":"default","maxConcurrentSessions":21}`,
+	} {
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, adminRequest(http.MethodPatch, "/admin/settings", body, "secret"))
+		if w.Code != http.StatusBadRequest {
+			t.Fatalf("body=%s status=%d response=%s", body, w.Code, w.Body.String())
+		}
+	}
+}
+
+func TestAdminHandlerManagesTemplates(t *testing.T) {
+	dataDir := t.TempDir()
+	e := New(Config{DataDir: dataDir})
+	defer e.Close()
+	h := e.AdminHandler("secret")
+	createW := httptest.NewRecorder()
+	h.ServeHTTP(createW, adminRequest(http.MethodPost, "/admin/templates", `{"label":"Review","prompt":"Review current changes"}`, "secret"))
+	if createW.Code != http.StatusCreated {
+		t.Fatalf("status=%d body=%s", createW.Code, createW.Body.String())
+	}
+	var created adminproto.Template
+	if err := json.NewDecoder(createW.Body).Decode(&created); err != nil {
+		t.Fatal(err)
+	}
+	if created.TemplateID == "" || created.Label != "Review" {
+		t.Fatalf("template=%+v", created)
+	}
+
+	statusW := httptest.NewRecorder()
+	h.ServeHTTP(statusW, adminRequest(http.MethodGet, "/admin/status", "", "secret"))
+	var snapshot adminproto.Snapshot
+	if err := json.NewDecoder(statusW.Body).Decode(&snapshot); err != nil {
+		t.Fatal(err)
+	}
+	if len(snapshot.Templates) != 1 || snapshot.Templates[0].Prompt != "Review current changes" {
+		t.Fatalf("templates=%+v", snapshot.Templates)
+	}
+
+	deleteW := httptest.NewRecorder()
+	h.ServeHTTP(deleteW, adminRequest(http.MethodDelete, "/admin/templates/"+created.TemplateID, "", "secret"))
+	if deleteW.Code != http.StatusNoContent {
+		t.Fatalf("status=%d body=%s", deleteW.Code, deleteW.Body.String())
+	}
+}
+
+func TestAdminHandlerRejectsBlankTemplate(t *testing.T) {
+	e := New(Config{DataDir: t.TempDir()})
+	defer e.Close()
+	w := httptest.NewRecorder()
+	e.AdminHandler("secret").ServeHTTP(w, adminRequest(http.MethodPost, "/admin/templates", `{"label":"","prompt":"Run"}`, "secret"))
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("status=%d body=%s", w.Code, w.Body.String())
+	}
+}
+
 func mustJSONString(t *testing.T, value string) string {
 	t.Helper()
 	b, err := json.Marshal(value)
