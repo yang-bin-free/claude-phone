@@ -1,7 +1,7 @@
 (() => {
-  const chat = document.querySelector("#chat-view");
-  const admin = document.querySelector("#admin-view");
-  const title = document.querySelector("#view-title");
+  function run(action) {
+    Promise.resolve().then(action).catch(error => feedback(error.message, true));
+  }
   async function refresh() {
     const token = window.claudePhone.adminToken;
     const response = await fetch("/admin/status", { headers: { Authorization: `Bearer ${token}` } });
@@ -28,7 +28,7 @@
       const revoke = document.createElement("button");
       revoke.className = "quiet danger";
       revoke.textContent = "吊销";
-      revoke.addEventListener("click", () => revokeDevice(device.deviceId));
+      revoke.addEventListener("click", () => run(() => revokeDevice(device.deviceId)));
       row.append(label, revoke);
       deviceList.append(row);
     });
@@ -43,7 +43,7 @@
       const remove = document.createElement("button");
       remove.className = "quiet danger";
       remove.textContent = "删除";
-      remove.addEventListener("click", () => deleteProject(project.projectId));
+      remove.addEventListener("click", () => run(() => deleteProject(project.projectId)));
       row.append(label, remove);
       projectList.append(row);
     });
@@ -62,7 +62,7 @@
       const remove = document.createElement("button");
       remove.className = "quiet danger";
       remove.textContent = "删除";
-      remove.addEventListener("click", () => deleteTemplate(template.templateId));
+      remove.addEventListener("click", () => run(() => deleteTemplate(template.templateId)));
       row.append(copy, remove);
       templateList.append(row);
     });
@@ -77,7 +77,7 @@
       const remove = document.createElement("button");
       remove.className = "quiet danger";
       remove.textContent = "删除";
-      remove.addEventListener("click", () => deletePermissionRule(rule.ruleId));
+      remove.addEventListener("click", () => run(() => deletePermissionRule(rule.ruleId)));
       row.append(label, remove);
       permissionList.append(row);
     });
@@ -103,7 +103,7 @@
       const stop = document.createElement("button");
       stop.className = "quiet danger";
       stop.textContent = "停止";
-      stop.addEventListener("click", () => stopSession(session.sessionId));
+      stop.addEventListener("click", () => run(() => stopSession(session.sessionId)));
       row.append(copy, stop);
       list.append(row);
     });
@@ -182,43 +182,48 @@
   });
   document.querySelector("#project-form").addEventListener("submit", async event => {
     event.preventDefault();
-    const response = await fetch("/admin/projects", {
-      method: "POST",
-      headers: { Authorization: `Bearer ${window.claudePhone.adminToken}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ name: document.querySelector("#project-name").value.trim(), path: document.querySelector("#project-path").value.trim(), permission: "default" })
-    });
-    if (!response.ok) throw new Error(await response.text());
-    event.target.reset();
-    await refresh();
+    try {
+      const response = await fetch("/admin/projects", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${window.claudePhone.adminToken}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ name: document.querySelector("#project-name").value.trim(), path: document.querySelector("#project-path").value.trim(), permission: "default" })
+      });
+      if (!response.ok) throw new Error(await response.text());
+      event.target.reset();
+      feedback("工作目录已添加");
+      await refresh();
+    } catch (error) { feedback(error.message, true); }
   });
   document.querySelector("#device-form").addEventListener("submit", async event => {
     event.preventDefault();
-    const response = await fetch("/admin/devices", {
-      method: "POST",
-      headers: { Authorization: `Bearer ${window.claudePhone.adminToken}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ name: document.querySelector("#device-name").value.trim() || "Android" })
-    });
-    if (!response.ok) throw new Error(await response.text());
-    const credential = await response.json();
-    const output = document.querySelector("#new-device-token");
-    output.hidden = false;
-    output.textContent = `请复制到手机（只显示一次）：\n${credential.deviceToken}`;
-    event.target.reset();
-    await refresh();
+    try {
+      const response = await fetch("/admin/devices", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${window.claudePhone.adminToken}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ name: document.querySelector("#device-name").value.trim() || "Android" })
+      });
+      if (!response.ok) throw new Error(await response.text());
+      const credential = await response.json();
+      const output = document.querySelector("#new-device-token");
+      output.hidden = false;
+      output.textContent = `请复制到手机（只显示一次）：\n${credential.deviceToken}`;
+      event.target.reset();
+      await refresh();
+    } catch (error) { feedback(error.message, true); }
   });
   document.querySelector("#permission-form").addEventListener("submit", async event => {
     event.preventDefault();
-    const response = await fetch("/admin/permission-rules", {
-      method: "POST",
-      headers: { Authorization: `Bearer ${window.claudePhone.adminToken}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ tool: document.querySelector("#permission-tool").value.trim(), pattern: document.querySelector("#permission-pattern").value.trim() })
-    });
-    if (!response.ok) throw new Error(await response.text());
-    event.target.reset();
-    await refresh();
+    try {
+      const response = await fetch("/admin/permission-rules", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${window.claudePhone.adminToken}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ tool: document.querySelector("#permission-tool").value.trim(), pattern: document.querySelector("#permission-pattern").value.trim() })
+      });
+      if (!response.ok) throw new Error(await response.text());
+      event.target.reset();
+      feedback("权限规则已添加");
+      await refresh();
+    } catch (error) { feedback(error.message, true); }
   });
-  document.querySelector("#show-admin").addEventListener("click", async () => {
-    chat.hidden = true; admin.hidden = false; title.textContent = "管理与诊断";
-    try { await refresh(); } catch (error) { document.querySelector("#admin-sessions").textContent = error.message; }
-  });
+  window.claudePhone.refreshAdmin = refresh;
 })();

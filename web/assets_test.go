@@ -43,3 +43,28 @@ func TestSharedChatAssetsSupportMobileRemoteConnection(t *testing.T) {
 		}
 	}
 }
+
+func TestDesktopShellHasStableStateAndNavigationHooks(t *testing.T) {
+	htmlBytes, err := fs.ReadFile(Assets, "chat/index.html")
+	if err != nil {
+		t.Fatal(err)
+	}
+	html := string(htmlBytes)
+	for _, id := range []string{"startup-banner", "chat-view", "admin-view", "session-list", "composer", "admin-sessions"} {
+		marker := `id="` + id + `"`
+		if strings.Count(html, marker) != 1 {
+			t.Fatalf("%s count=%d", marker, strings.Count(html, marker))
+		}
+	}
+
+	jsBytes, err := fs.ReadFile(Assets, "chat/chat.js")
+	if err != nil {
+		t.Fatal(err)
+	}
+	js := string(jsBytes)
+	for _, marker := range []string{"/desktop/status", "showChat", "showAdmin", "setComposerEnabled", "showBanner", "retryTimer", "JSON.parse"} {
+		if !strings.Contains(js, marker) {
+			t.Fatalf("chat.js missing %q", marker)
+		}
+	}
+}

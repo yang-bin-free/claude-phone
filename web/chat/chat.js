@@ -1,7 +1,16 @@
 (() => {
-  const state = { ws: null, sessionId: "", retry: 0, assistantChunk: null, pendingTokens: "", tokenFrame: 0, sessions: [], projects: [], templates: [] };
+  const state = {
+    ws: null, sessionId: "", retry: 0, retryTimer: 0, statusTimer: 0, generation: 0,
+    assistantChunk: null, pendingTokens: "", tokenFrame: 0,
+    sessions: [], projects: [], templates: [], engineReady: false
+  };
   const messages = document.querySelector("#messages");
   const connection = document.querySelector("#connection-state");
+  const banner = document.querySelector("#startup-banner");
+  const chat = document.querySelector("#chat-view");
+  const admin = document.querySelector("#admin-view");
+  const composer = document.querySelector("#composer");
+  const prompt = document.querySelector("#prompt");
   const params = new URLSearchParams(location.search);
   const token = new URLSearchParams(location.hash.slice(1)).get("token") || "";
   const platform = params.get("platform") || "desktop";
@@ -9,10 +18,45 @@
   const deviceToken = params.get("deviceToken") || `${platform}-${token || "local"}`;
   const deviceName = params.get("deviceName") || (platform === "mobile" ? "Android" : "Mac");
   document.body.classList.add(platform);
+
+  function showBanner(message) {
+    banner.textContent = message || "";
+    banner.hidden = !message;
+  }
+
+  function setComposerEnabled(enabled) {
+    state.engineReady = enabled;
+    prompt.disabled = !enabled;
+    composer.querySelector("button.primary").disabled = !enabled;
+    document.querySelector("#new-session").disabled = !enabled;
+    document.querySelector("#new-session-mobile").disabled = !enabled;
+  }
+
+  function showChat() {
+    chat.hidden = false;
+    admin.hidden = true;
+    document.querySelector("#show-admin").classList.remove("active");
+    if (platform === "desktop") prompt.focus();
+  }
+
+  async function showAdmin() {
+    if (platform === "mobile") return;
+    chat.hidden = true;
+    admin.hidden = false;
+    document.querySelector("#show-admin").classList.add("active");
+    document.querySelector("#view-title").textContent = "管理与诊断";
+    if (window.claudePhone.refreshAdmin) {
+      try { await window.claudePhone.refreshAdmin(); }
+      catch (error) { showBanner(`管理数据加载失败：${error.message}`); }
+    }
+  }
+
   window.claudePhone = {
     adminToken: token,
     state,
-    setPrompt(value) { document.querySelector("#prompt").value = value || ""; }
+    showChat,
+    showAdmin,
+    setPrompt(value) { prompt.value = value || ""; prompt.focus(); }
   };
 
   function append(role, text) {
@@ -48,12 +92,15 @@
   }
 
   function send(value) {
-    if (state.ws?.readyState === WebSocket.OPEN) state.ws.send(JSON.stringify(value));
+    if (state.ws?.readyState !== WebSocket.OPEN) return false;
+    state.ws.send(JSON.stringify(value));
+    return true;
   }
 
   function selectSession(sessionId, name) {
     state.sessionId = sessionId;
     resetStream();
+    showChat();
     document.querySelector("#view-title").textContent = name || "会话";
     document.querySelector("#stop-session").disabled = false;
     messages.replaceChildren();
@@ -73,6 +120,9 @@
       } else if (item.type === "token") {
         if (!assistant) assistant = append("assistant", "");
         assistant.textContent += item.content || "";
+      } else if (item.type === "tool_use") {
+        append("tool", `🔧 ${item.tool || "工具"}${item.input ? `\n${item.input}` : ""}`);
+        assistant = null;
       } else if (item.type === "done") {
         assistant = null;
       }
@@ -94,107 +144,170 @@
     });
   }
 
+  function handleMessage(event) {
+    let msg;
+    try { msg = JSON.parse(event.data); }
+    catch (error) {
+      append("error", `协议消息无法解析：${error.message}`);
+      return;
+    }
+    switch (msg.type) {
+      case "hello":
+        send({ type: "control", action: "list_sessions", limit: 100 });
+        send({ type: "control", action: "list_projects" });
+        send({ type: "control", action: "list_templates" });
+        break;
+      case "session_list":
+        state.sessions = msg.sessions || [];
+        renderSessions();
+        break;
+      case "session_created":
+        state.sessionId = msg.sessionId;
+        resetStream();
+        showChat();
+        messages.replaceChildren();
+        document.querySelector("#view-title").textContent = msg.name || "新会话";
+        document.querySelector("#stop-session").disabled = false;
+        send({ type: "control", action: "list_sessions", limit: 100 });
+        break;
+      case "project_list": {
+        state.projects = msg.projects || [];
+        const select = document.querySelector("#create-project");
+        select.replaceChildren(new Option("默认目录", ""));
+        state.projects.forEach(project => select.add(new Option(project.name, project.path)));
+        break;
+      }
+      case "template_list": {
+        state.templates = msg.templates || [];
+        const container = document.querySelector("#prompt-templates");
+        container.replaceChildren();
+        state.templates.forEach(template => {
+          const button = document.createElement("button");
+          button.type = "button";
+          button.className = "quiet";
+          button.textContent = template.label;
+          button.addEventListener("click", () => window.claudePhone.setPrompt(template.prompt));
+          container.append(button);
+        });
+        break;
+      }
+      case "history":
+        if (msg.sessionId === state.sessionId) renderHistory(msg.messages);
+        break;
+      case "health":
+        if (msg.sessionId === state.sessionId) {
+          connection.textContent = msg.state === "healthy" ? "已连接" : (msg.state === "stalled" ? "会话可能卡住" : "会话无响应");
+        }
+        break;
+      case "queued":
+        append("queued", `已排队（第 ${msg.position} 条）`);
+        break;
+      case "dequeued":
+        break;
+      case "thinking":
+        state.assistantChunk = null;
+        break;
+      case "tool_use":
+        flushTokens();
+        state.assistantChunk = null;
+        append("tool", `🔧 ${msg.tool}${msg.input ? `\n${msg.input}` : ""}`);
+        break;
+      case "token":
+        queueToken(msg.content);
+        break;
+      case "done":
+        flushTokens();
+        state.assistantChunk = null;
+        break;
+      case "session_stopped":
+        if (state.sessionId === msg.sessionId) {
+          state.sessionId = "";
+          document.querySelector("#view-title").textContent = "新会话";
+          document.querySelector("#stop-session").disabled = true;
+          messages.replaceChildren(Object.assign(document.createElement("p"), { className: "empty", textContent: "会话已停止。" }));
+        }
+        send({ type: "control", action: "list_sessions", limit: 100 });
+        break;
+      case "error":
+        append("error", `${msg.code}: ${msg.message}`);
+        break;
+    }
+  }
+
+  function scheduleReconnect(generation) {
+    if (generation !== state.generation) return;
+    clearTimeout(state.retryTimer);
+    const delay = Math.min(1000 * (2 ** state.retry++), 15000);
+    state.retryTimer = setTimeout(() => connect(), delay);
+  }
+
   function connect() {
+    clearTimeout(state.retryTimer);
+    const generation = ++state.generation;
+    if (state.ws) {
+      state.ws.onopen = state.ws.onclose = state.ws.onmessage = null;
+      state.ws.close();
+    }
     const scheme = location.protocol === "https:" ? "wss" : "ws";
     const endpoint = configuredWS || `${scheme}://${location.host}/ws`;
     const ws = new WebSocket(endpoint);
     state.ws = ws;
     ws.onopen = () => {
+      if (generation !== state.generation) return;
       state.retry = 0;
       connection.textContent = "已连接";
       document.querySelector("#status-dot").classList.add("online");
+      showBanner("");
+      setComposerEnabled(true);
       send({ type: "auth", deviceToken, deviceName });
     };
     ws.onclose = () => {
+      if (generation !== state.generation) return;
+      state.ws = null;
       connection.textContent = "重新连接中";
       document.querySelector("#status-dot").classList.remove("online");
-      const delay = Math.min(1000 * (2 ** state.retry++), 15000);
-      setTimeout(connect, delay);
+      setComposerEnabled(false);
+      scheduleReconnect(generation);
     };
-    ws.onmessage = event => {
-      const msg = JSON.parse(event.data);
-      switch (msg.type) {
-        case "hello":
-          send({ type: "control", action: "list_sessions", limit: 100 });
-          send({ type: "control", action: "list_projects" });
-          send({ type: "control", action: "list_templates" });
-          break;
-        case "session_list":
-          state.sessions = msg.sessions || [];
-          renderSessions();
-          break;
-        case "session_created":
-          state.sessionId = msg.sessionId;
-          resetStream();
-          document.querySelector("#view-title").textContent = msg.name || "新会话";
-          document.querySelector("#stop-session").disabled = false;
-          send({ type: "control", action: "list_sessions", limit: 100 });
-          break;
-        case "project_list": {
-          state.projects = msg.projects || [];
-          const select = document.querySelector("#create-project");
-          select.replaceChildren(new Option("默认目录", ""));
-          state.projects.forEach(project => select.add(new Option(project.name, project.path)));
-          break;
-        }
-        case "template_list": {
-          state.templates = msg.templates || [];
-          const container = document.querySelector("#prompt-templates");
-          container.replaceChildren();
-          state.templates.forEach(template => {
-            const button = document.createElement("button");
-            button.type = "button"; button.className = "quiet"; button.textContent = template.label;
-            button.addEventListener("click", () => window.claudePhone.setPrompt(template.prompt));
-            container.append(button);
-          });
-          break;
-        }
-        case "history":
-          if (msg.sessionId === state.sessionId) renderHistory(msg.messages);
-          break;
-        case "health":
-          if (msg.sessionId === state.sessionId) {
-            connection.textContent = msg.state === "healthy" ? "已连接" : (msg.state === "stalled" ? "会话可能卡住" : "会话无响应");
-          }
-          break;
-        case "queued":
-          append("queued", `已排队（第 ${msg.position} 条）`);
-          break;
-        case "dequeued":
-          break;
-        case "thinking":
-          state.assistantChunk = null;
-          break;
-        case "tool_use":
-          flushTokens();
-          state.assistantChunk = null;
-          append("assistant", `🔧 ${msg.tool}${msg.input ? `\n${msg.input}` : ""}`);
-          break;
-        case "token":
-          queueToken(msg.content);
-          break;
-        case "done":
-          flushTokens();
-          state.assistantChunk = null;
-          break;
-        case "session_stopped":
-          if (state.sessionId === msg.sessionId) {
-            state.sessionId = "";
-            document.querySelector("#view-title").textContent = "新会话";
-            document.querySelector("#stop-session").disabled = true;
-          }
-          send({ type: "control", action: "list_sessions", limit: 100 });
-          break;
-        case "error":
-          append("error", `${msg.code}: ${msg.message}`);
-          break;
-      }
+    ws.onerror = () => {
+      if (generation === state.generation) connection.textContent = "连接失败";
     };
+    ws.onmessage = handleMessage;
   }
 
-  const createSession = () => send({ type: "control", action: "create_session", name: platform === "mobile" ? "Android 会话" : "Mac 会话", workingDir: document.querySelector("#create-project").value, permissionMode: document.querySelector("#create-permission").value });
+  async function bootstrapDesktop() {
+    clearTimeout(state.statusTimer);
+    if (platform !== "desktop") {
+      connect();
+      return;
+    }
+    try {
+      const response = await fetch("/desktop/status", { cache: "no-store" });
+      if (!response.ok) throw new Error(`状态服务 ${response.status}`);
+      const status = await response.json();
+      if (!status.ready) {
+        connection.textContent = status.paused ? "引擎已暂停" : "引擎不可用";
+        showBanner(status.error || (status.paused ? "引擎已暂停，可从菜单栏恢复。" : "引擎正在启动…"));
+        setComposerEnabled(false);
+        state.statusTimer = setTimeout(bootstrapDesktop, 2000);
+        return;
+      }
+      showBanner("");
+      connect();
+    } catch (error) {
+      showBanner(`桌面服务不可用：${error.message}`);
+      setComposerEnabled(false);
+      state.statusTimer = setTimeout(bootstrapDesktop, 2000);
+    }
+  }
+
+  const createSession = () => {
+    showChat();
+    send({ type: "control", action: "create_session", name: platform === "mobile" ? "Android 会话" : "Mac 会话", workingDir: document.querySelector("#create-project").value, permissionMode: document.querySelector("#create-permission").value });
+  };
   document.querySelector("#new-session").addEventListener("click", createSession);
   document.querySelector("#new-session-mobile").addEventListener("click", createSession);
+  document.querySelector("#show-admin").addEventListener("click", showAdmin);
   document.querySelector("#mobile-session-select").addEventListener("change", event => {
     const session = state.sessions.find(item => item.sessionId === event.target.value);
     if (session) selectSession(session.sessionId, session.name);
@@ -208,18 +321,25 @@
   document.querySelector("#voice-mobile").addEventListener("click", () => {
     if (window.AndroidBridge?.startVoice) AndroidBridge.startVoice();
   });
-  document.querySelector("#composer").addEventListener("submit", event => {
+  composer.addEventListener("submit", event => {
     event.preventDefault();
-    const input = document.querySelector("#prompt");
-    const content = input.value.trim();
-    if (!content) return;
+    const content = prompt.value.trim();
+    if (!content || !state.engineReady) return;
     append("user", content);
     state.assistantChunk = null;
     send({ type: "text", content });
-    input.value = "";
+    prompt.value = "";
   });
-  document.querySelector("#prompt").addEventListener("keydown", event => {
-    if (event.metaKey && event.key === "Enter") document.querySelector("#composer").requestSubmit();
+  prompt.addEventListener("keydown", event => {
+    if (event.metaKey && event.key === "Enter") composer.requestSubmit();
   });
-  connect();
+  document.addEventListener("keydown", event => {
+    if (!event.metaKey) return;
+    if (event.key.toLowerCase() === "n") { event.preventDefault(); createSession(); }
+    if (event.key === ",") { event.preventDefault(); showAdmin(); }
+  });
+
+  setComposerEnabled(false);
+  showChat();
+  bootstrapDesktop();
 })();
