@@ -1,0 +1,79 @@
+# Mac V1 Acceptance Plan
+
+## Release rule
+
+Mac V1 is releasable only when every `P0` and `P1` case below passes on the
+packaged application, `make verify` passes, the installed bundle passes
+`codesign --verify --deep --strict`, and no Claude Phone or `caffeinate` child
+process is left behind after Quit. A failed case reopens the release: fix it,
+add a regression test, rebuild, and rerun the entire plan from a clean install.
+
+## Test environment
+
+- macOS 12 or newer, Apple Silicon or Intel as available.
+- Packaged `Claude Phone.app`, not an unbundled Go executable.
+- Real installed Claude Code for one end-to-end response; fake Claude for
+  deterministic streaming and failure injection.
+- Isolated data directory for destructive tests. Existing `~/.claude-phone`
+  data is never deleted or overwritten.
+- Autostart state is captured before testing and restored afterward.
+
+## Acceptance matrix
+
+| ID | Priority | Scenario | Pass criteria | Evidence |
+|---|---|---|---|---|
+| PKG-01 | P0 | Full repository verification | Unit, integration, race, JS, Android contract and iOS structure checks exit 0 | `make verify` output |
+| PKG-02 | P0 | Build and package Mac app | Bundle contains executable, icon and versioned plist; ZIP and SHA256 validate | build log, `codesign`, `shasum` |
+| PKG-03 | P1 | Clean install in `/Applications` | Installed bundle launches from Finder and runs the packaged executable | process path and screenshot |
+| LIFE-01 | P0 | First launch | Window appears, menu item appears, status becomes ready, no crash | window count, `/desktop/status` |
+| LIFE-02 | P0 | Close then reopen | Closing hides the window; double-clicking the running app restores exactly one window | `scripts/test-mac-reopen.sh` |
+| LIFE-03 | P1 | Repeated open | Repeated double-click/open does not spawn duplicate engines or listeners | PID and listener counts |
+| LIFE-04 | P0 | Quit | Window, listener, Claude child and app-owned `caffeinate` terminate | process audit |
+| MENU-01 | P1 | Show and Hide | Both menu commands change window visibility without stopping the engine | accessibility assertions |
+| MENU-02 | P1 | Pause and Resume | Pause returns an unavailable state without exiting; Resume returns ready | status and menu text |
+| MENU-03 | P1 | Diagnostics | Diagnostics opens the management view and all panels load | DOM/screenshot and console |
+| MENU-04 | P1 | Autostart toggle | Enable creates a valid LaunchAgent; disable removes it; original state is restored | `launchctl` and file checks |
+| CHAT-01 | P0 | New real-Claude session | Session starts in selected directory and real Claude returns the requested response | UI transcript and history file |
+| CHAT-02 | P0 | Streaming | Partial text is rendered in order, once, without duplicated chunks | deterministic fake transcript |
+| CHAT-03 | P1 | Stop session | Stop ends the Claude child, updates controls and does not affect the app engine | UI and process audit |
+| CHAT-04 | P0 | Restart and restore | App restart restores session list, selected history and send readiness | before/after state |
+| CHAT-05 | P1 | Multiple sessions | Switching sessions keeps histories isolated and selects the correct process | UI and persisted files |
+| CHAT-06 | P1 | Long/multiline input | Unicode and multiline input round-trip without truncation or broken layout | transcript and screenshot |
+| ADMIN-01 | P1 | Project CRUD | Add/update/remove project persists and controls the new-session selector | admin UI and YAML |
+| ADMIN-02 | P1 | Template CRUD | Add/update/remove template persists and inserts the correct prompt | admin UI and YAML |
+| ADMIN-03 | P1 | Permission rules | Rule changes persist and are passed to newly created sessions | admin UI and process args/test |
+| ADMIN-04 | P1 | Runtime settings | Valid settings apply; invalid directory, permission and limits are rejected | HTTP/UI response and YAML |
+| ADMIN-05 | P1 | Diagnostics content | Claude version/path, devices, sessions and health counts match runtime | UI vs process/status audit |
+| ERR-01 | P0 | Claude CLI missing | App stays open and shows an actionable unavailable message; Resume can recover | screenshot and status |
+| ERR-02 | P1 | Claude CLI exits early | User sees an error instead of a permanently busy session | UI and injected stderr |
+| ERR-03 | P1 | Unauthorized browser client | Connection is rejected once with a stable message; no unbounded duplicate banners | DOM and console |
+| ERR-04 | P1 | Port already occupied | Launch fails visibly and leaves no partial background process | exit/log/process audit |
+| ERR-05 | P1 | Invalid/corrupt persisted data | App starts with a clear error or safe defaults and does not destroy the file | backup, UI/log and checksum |
+| SEC-01 | P0 | Loopback boundary | Desktop server binds only to loopback and rejects non-loopback configuration | listener and unit tests |
+| SEC-02 | P0 | Admin/device authorization | Missing or wrong tokens cannot access WebSocket/admin endpoints | HTTP/WebSocket assertions |
+| SEC-03 | P1 | Secret scan | No token, key or credential is present in tracked changes or release metadata | repository scan |
+| UX-01 | P1 | Desktop layout | 1180×760 has no overlap, clipping or unusable controls in chat/admin states | screenshots |
+| UX-02 | P2 | Narrow layout | Small viewport remains navigable and controls stay reachable | browser viewport screenshots |
+| UX-03 | P1 | Console health | No uncaught JavaScript errors during the complete workflow | browser logs |
+
+## Execution order
+
+1. Record commit, OS, Claude version, current autostart state and process baseline.
+2. Run package/build gates and install the resulting bundle.
+3. Run lifecycle and menu cases against the installed application.
+4. Run deterministic chat cases with fake Claude in an isolated data directory.
+5. Run one real-Claude end-to-end prompt and restart/restore it.
+6. Run administration and persisted-data cases.
+7. Run failure injection and authorization cases.
+8. Audit processes, restore autostart, verify the release ZIP, and rerun
+   `make verify` after the last code change.
+9. Publish the QA report with per-case results, issue evidence, fix commits and
+   the exact final commit SHA.
+
+## Required release artifacts
+
+- `build/Claude Phone.app`
+- `build/release/claude-phone-macos-<version>.zip`
+- `build/release/SHA256SUMS`
+- `.gstack/qa-reports/qa-report-claude-phone-mac-<date>.md`
+
