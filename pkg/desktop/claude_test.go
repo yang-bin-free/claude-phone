@@ -49,6 +49,21 @@ func TestResolveClaudeBinaryUsesFinderFallback(t *testing.T) {
 	}
 }
 
+func TestResolveClaudeBinaryUsesNVMFallbackWithoutShellPATH(t *testing.T) {
+	home := t.TempDir()
+	binDir := filepath.Join(home, ".nvm", "versions", "node", "v22.23.1", "bin")
+	if err := os.MkdirAll(binDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	bin := writeExecutable(t, binDir, "claude")
+	t.Setenv("HOME", home)
+	t.Setenv("PATH", "/usr/bin:/bin")
+	got, err := ResolveClaudeBinary("claude")
+	if err != nil || got != bin {
+		t.Fatalf("got=%q want=%q err=%v", got, bin, err)
+	}
+}
+
 func TestResolveClaudeBinaryRejectsNonExecutableAndReportsSearch(t *testing.T) {
 	home := t.TempDir()
 	binDir := filepath.Join(home, ".local", "bin")

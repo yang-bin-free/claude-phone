@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strings"
 )
 
@@ -45,12 +46,26 @@ func ResolveClaudeBinary(requested string) (string, error) {
 	}
 
 	home, _ := os.UserHomeDir()
-	for _, path := range []string{
+	candidates := []string{
 		filepath.Join(home, ".local", "bin", requested),
 		filepath.Join(home, ".claude", "local", requested),
-		"/opt/homebrew/bin/" + requested,
-		"/usr/local/bin/" + requested,
-	} {
+		filepath.Join(home, ".volta", "bin", requested),
+		filepath.Join(home, ".asdf", "shims", requested),
+		filepath.Join(home, ".local", "share", "mise", "shims", requested),
+	}
+	nvmPattern := filepath.Join(home, ".nvm", "versions", "node", "*", "bin", requested)
+	nvmCandidates, _ := filepath.Glob(nvmPattern)
+	sort.Sort(sort.Reverse(sort.StringSlice(nvmCandidates)))
+	if len(nvmCandidates) == 0 {
+		candidates = append(candidates, nvmPattern)
+	} else {
+		candidates = append(candidates, nvmCandidates...)
+	}
+	candidates = append(candidates,
+		"/opt/homebrew/bin/"+requested,
+		"/usr/local/bin/"+requested,
+	)
+	for _, path := range candidates {
 		add(path)
 		if executableFile(path) {
 			return path, nil
