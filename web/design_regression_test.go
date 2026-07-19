@@ -101,3 +101,19 @@ func TestDesktopEmptyStateExplainsTheNextAction(t *testing.T) {
 		}
 	}
 }
+
+func TestDesktopComposerWaitsForSessionSelectionAfterReconnect(t *testing.T) {
+	jsBytes, err := fs.ReadFile(Assets, "chat/chat.js")
+	if err != nil {
+		t.Fatal(err)
+	}
+	js := string(jsBytes)
+	for _, marker := range []string{
+		"sessionReady: false", "function updateControls()", "state.sessionReady = false",
+		"state.sessionReady = true", `action: "select_session", sessionId: state.sessionId`,
+	} {
+		if !strings.Contains(js, marker) {
+			t.Errorf("chat reconnect guard missing %q", marker)
+		}
+	}
+}

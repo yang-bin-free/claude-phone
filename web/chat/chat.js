@@ -2,7 +2,7 @@
   const state = {
     ws: null, sessionId: "", retry: 0, retryTimer: 0, statusTimer: 0, generation: 0,
     assistantChunk: null, pendingTokens: "", tokenFrame: 0,
-    sessions: [], projects: [], templates: [], engineReady: false
+    sessions: [], projects: [], templates: [], engineReady: false, connected: false, sessionReady: false
   };
   const messages = document.querySelector("#messages");
   const connection = document.querySelector("#connection-state");
@@ -24,12 +24,18 @@
     banner.hidden = !message;
   }
 
+  function updateControls() {
+    const canCreate = state.engineReady && state.connected;
+    const canSend = canCreate && state.sessionReady;
+    prompt.disabled = !canSend;
+    composer.querySelector("button.primary").disabled = !canSend;
+    document.querySelector("#new-session").disabled = !canCreate;
+    document.querySelector("#new-session-mobile").disabled = !canCreate;
+  }
+
   function setComposerEnabled(enabled) {
     state.engineReady = enabled;
-    prompt.disabled = !enabled;
-    composer.querySelector("button.primary").disabled = !enabled;
-    document.querySelector("#new-session").disabled = !enabled;
-    document.querySelector("#new-session-mobile").disabled = !enabled;
+    updateControls();
   }
 
   function showChat() {
@@ -101,6 +107,8 @@
 
   function selectSession(sessionId, name) {
     state.sessionId = sessionId;
+    state.sessionReady = false;
+    updateControls();
     resetStream();
     showChat();
     document.querySelector("#view-title").textContent = name || "会话";
@@ -158,6 +166,10 @@
         send({ type: "control", action: "list_sessions", limit: 100 });
         send({ type: "control", action: "list_projects" });
         send({ type: "control", action: "list_templates" });
+        if (state.sessionId) {
+          send({ type: "control", action: "select_session", sessionId: state.sessionId });
+          send({ type: "control", action: "load_history", sessionId: state.sessionId, limit: 500 });
+        }
         break;
       case "session_list":
         state.sessions = msg.sessions || [];
@@ -165,6 +177,8 @@
         break;
       case "session_created":
         state.sessionId = msg.sessionId;
+        state.sessionReady = true;
+        updateControls();
         resetStream();
         showChat();
         messages.replaceChildren();
@@ -194,7 +208,11 @@
         break;
       }
       case "history":
-        if (msg.sessionId === state.sessionId) renderHistory(msg.messages);
+        if (msg.sessionId === state.sessionId) {
+          renderHistory(msg.messages);
+          state.sessionReady = true;
+          updateControls();
+        }
         break;
       case "health":
         if (msg.sessionId === state.sessionId) {
@@ -224,6 +242,8 @@
       case "session_stopped":
         if (state.sessionId === msg.sessionId) {
           state.sessionId = "";
+          state.sessionReady = false;
+          updateControls();
           document.querySelector("#view-title").textContent = "新会话";
           document.querySelector("#stop-session").disabled = true;
           messages.replaceChildren(Object.assign(document.createElement("p"), { className: "empty", textContent: "会话已停止。" }));
@@ -257,6 +277,7 @@
     ws.onopen = () => {
       if (generation !== state.generation) return;
       state.retry = 0;
+      state.connected = true;
       connection.textContent = "已连接";
       document.querySelector("#status-dot").classList.add("online");
       showBanner("");
@@ -266,6 +287,8 @@
     ws.onclose = () => {
       if (generation !== state.generation) return;
       state.ws = null;
+      state.connected = false;
+      state.sessionReady = false;
       connection.textContent = "重新连接中";
       document.querySelector("#status-dot").classList.remove("online");
       setComposerEnabled(false);
@@ -328,7 +351,7 @@
   composer.addEventListener("submit", event => {
     event.preventDefault();
     const content = prompt.value.trim();
-    if (!content || !state.engineReady) return;
+    if (!content || !state.engineReady || !state.connected || !state.sessionReady) return;
     append("user", content);
     state.assistantChunk = null;
     send({ type: "text", content });
