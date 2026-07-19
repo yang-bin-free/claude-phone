@@ -48,3 +48,19 @@ func TestDesktopDiagnosticsUseCompactSummary(t *testing.T) {
 		t.Error("diagnostics items should use the flat summary presentation")
 	}
 }
+
+func TestDesktopThemeUsesWarmAccentAndMacSizedControls(t *testing.T) {
+	cssBytes, err := fs.ReadFile(Assets, "chat/core.css")
+	if err != nil {
+		t.Fatal(err)
+	}
+	css := string(cssBytes)
+	for _, marker := range []string{"--accent: #d97757", "min-height: 44px", "var(--accent)"} {
+		if !strings.Contains(css, marker) {
+			t.Errorf("desktop theme missing %q", marker)
+		}
+	}
+	if strings.Contains(css, "#7c5cff") {
+		t.Error("legacy generic-purple accent is still active")
+	}
+}

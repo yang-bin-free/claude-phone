@@ -1,4 +1,4 @@
-body.mobile { background: #111318; }
+body.mobile { background: var(--bg); }
 .mobile .app-shell { display: block; min-height: 100vh; }
 .mobile .sidebar { display: none; }
 .mobile .workspace { min-height: 100vh; grid-template-rows: 52px minmax(0, 1fr); }
@@ -12,7 +12,7 @@ body.mobile { background: #111318; }
 .mobile #connection-state { display: none; }
 .mobile .messages { padding: 18px 14px; }
 .mobile .message { max-width: 88%; font-size: 15px; }
-.mobile #composer { position: sticky; bottom: 0; padding: 10px 12px calc(10px + env(safe-area-inset-bottom)); background: #111318; }
+.mobile #composer { position: sticky; bottom: 0; padding: 10px 12px calc(10px + env(safe-area-inset-bottom)); background: var(--bg); }
 .mobile #prompt-templates { padding: 6px 12px 0; }
 .mobile #prompt { min-height: 48px; }
 .mobile #composer .primary { min-width: 64px; }

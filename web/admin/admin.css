@@ -1,24 +1,24 @@
 .admin-view { padding: 26px; overflow: auto; }
-.metric-summary { display: flex; flex-wrap: wrap; gap: 0; border: 1px solid #2d3340; border-radius: 12px; background: #171a21; margin-bottom: 24px; padding: 10px 4px; }
-.metric-item { min-width: 124px; flex: 1 1 124px; padding: 4px 14px; border-right: 1px solid #2d3340; }
+.metric-summary { display: flex; flex-wrap: wrap; gap: 0; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); margin-bottom: 24px; padding: 10px 4px; }
+.metric-item { min-width: 124px; flex: 1 1 124px; padding: 4px 14px; border-right: 1px solid var(--border); }
 .metric-item:last-child { border-right: 0; }
-.metric-item span { display: block; color: #9099aa; font-size: 11px; margin-bottom: 5px; }
+.metric-item span { display: block; color: var(--muted); font-size: 11px; margin-bottom: 5px; }
 .metric-item strong { font-size: 15px; font-weight: 650; }
-#admin-sessions { background: #171a21; border-radius: 12px; padding: 8px 14px; color: #aeb5c5; }
-#admin-devices, #admin-permissions, #admin-templates { background: #171a21; border-radius: 12px; padding: 8px 14px; color: #aeb5c5; }
+#admin-sessions { background: var(--surface); border-radius: 12px; padding: 8px 14px; color: var(--muted); }
+#admin-devices, #admin-permissions, #admin-templates { background: var(--surface); border-radius: 12px; padding: 8px 14px; color: var(--muted); }
 .device-row, .project-row, .permission-row, .template-row, .session-admin-row { min-height: 44px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #282d38; gap: 12px; }
 .template-row p, .session-admin-row p { color: #9099aa; font-size: 12px; margin: 5px 0; white-space: pre-wrap; }
 .device-row:last-child { border-bottom: 0; }
-.danger { color: #ff8f9d; }
-#admin-projects { background: #171a21; border-radius: 12px; padding: 8px 14px; color: #aeb5c5; }
+.danger { color: var(--danger); }
+#admin-projects { background: var(--surface); border-radius: 12px; padding: 8px 14px; color: var(--muted); }
 #project-form, #permission-form, #template-form { display: grid; grid-template-columns: 160px minmax(240px, 1fr) auto; gap: 10px; margin-bottom: 10px; }
 #device-form { display: flex; gap: 10px; margin-bottom: 10px; }
-#project-form label, #device-form label, #permission-form label, #template-form label { color: #9099aa; display: grid; font-size: 12px; gap: 6px; }
+#project-form label, #device-form label, #permission-form label, #template-form label { color: var(--muted); display: grid; font-size: 12px; gap: 6px; }
 #project-form button, #device-form button, #permission-form button, #template-form button { align-self: end; min-height: 39px; }
-#project-form input, #device-form input, #permission-form input, #template-form input, #template-form textarea, #settings-form input, #settings-form select { border: 1px solid #343a48; border-radius: 9px; background: #1b1e26; color: inherit; padding: 10px; }
+#project-form input, #device-form input, #permission-form input, #template-form input, #template-form textarea, #settings-form input, #settings-form select { min-height: 44px; border: 1px solid var(--border); border-radius: 9px; background: var(--surface-raised); color: inherit; padding: 10px; }
 #template-form textarea { min-height: 72px; resize: vertical; }
 .settings-form { display: grid; grid-template-columns: minmax(260px, 1fr) 160px 140px auto; gap: 10px; align-items: end; }
-.settings-form label { color: #9099aa; display: grid; font-size: 12px; gap: 6px; }
-.admin-feedback { min-height: 20px; color: #36d487; }
-.admin-feedback.error { color: #ff8f9d; }
-#new-device-token { white-space: pre-wrap; background: #28223f; color: #d8ceff; border-radius: 9px; padding: 12px; user-select: all; }
+.settings-form label { color: var(--muted); display: grid; font-size: 12px; gap: 6px; }
+.admin-feedback { min-height: 20px; color: var(--success); }
+.admin-feedback.error { color: var(--danger); }
+#new-device-token { white-space: pre-wrap; background: #2c201b; color: #f0b49f; border-radius: 9px; padding: 12px; user-select: all; }
