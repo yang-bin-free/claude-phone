@@ -23,6 +23,6 @@ func launchAgentXML(executable string, args []string) ([]byte, error) {
 		}
 		out.WriteString("</string>")
 	}
-	out.WriteString("</array><key>RunAtLoad</key><true></true><key>KeepAlive</key><false></false></dict></plist>\n")
+	out.WriteString("</array><key>RunAtLoad</key><true/><key>KeepAlive</key><false/></dict></plist>\n")
 	return out.Bytes(), nil
 }
