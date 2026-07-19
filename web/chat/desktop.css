@@ -23,7 +23,10 @@ header { border-bottom: 1px solid var(--border); display: flex; align-items: cen
 .message.tool { background: #171f2a; border: 1px solid #2d4058; color: #c6d8ef; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; }
 .message.error { background: #53272d; color: #ffbbc3; }
 .message.queued { background: var(--surface-raised); color: var(--muted); font-size: 13px; }
-.empty { color: var(--muted); text-align: center; margin-top: 20vh; }
+.empty { color: var(--muted); text-align: center; margin: 18vh auto 0; max-width: 360px; }
+.empty-title { display: block; color: var(--text); font-size: 17px; margin-bottom: 8px; }
+.empty p { margin: 0 0 10px; }
+.empty span { font-size: 12px; }
 #composer { border-top: 1px solid var(--border); padding: 16px 22px; display: flex; gap: 12px; }
 #prompt { resize: none; flex: 1; border: 1px solid var(--border); border-radius: 12px; background: var(--surface-raised); color: inherit; padding: 12px; }
 #voice-mobile { display: none; }

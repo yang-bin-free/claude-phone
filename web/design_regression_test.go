@@ -88,3 +88,16 @@ func TestDesktopDestructiveActionsRequireConfirmation(t *testing.T) {
 		t.Error("chat session stop does not ask for confirmation")
 	}
 }
+
+func TestDesktopEmptyStateExplainsTheNextAction(t *testing.T) {
+	htmlBytes, err := fs.ReadFile(Assets, "chat/index.html")
+	if err != nil {
+		t.Fatal(err)
+	}
+	html := string(htmlBytes)
+	for _, marker := range []string{"选择工作目录", "⌘N", `class="empty-title"`} {
+		if !strings.Contains(html, marker) {
+			t.Errorf("desktop empty state missing %q", marker)
+		}
+	}
+}
