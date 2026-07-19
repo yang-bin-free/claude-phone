@@ -75,3 +75,8 @@ func shutdownNative(commands Commands, terminate func()) {
 	}
 	terminate()
 }
+
+func prepareNativeShell(registerStatusItem, createWindow func()) {
+	registerStatusItem()
+	createWindow()
+}

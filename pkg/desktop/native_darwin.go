@@ -17,15 +17,9 @@ import (
 )
 
 func runNative(ctx context.Context, pageURL string, commands Commands) error {
-	window := webview.New(false)
-	defer window.Destroy()
-	window.SetTitle("Claude Phone")
-	window.SetSize(1180, 760, webview.HintNone)
-	window.Navigate(pageURL)
-	C.cpConfigureWindow(unsafe.Pointer(window.Window()))
-
+	var window webview.WebView
 	done := make(chan struct{})
-	systray.Register(func() {
+	onReady := func() {
 		systray.SetTitle("CP")
 		systray.SetTooltip("Claude Phone")
 		status := systray.AddMenuItem("引擎启动中", "Claude Phone engine status")
@@ -112,11 +106,22 @@ func runNative(ctx context.Context, pageURL string, commands Commands) error {
 				}
 			}
 		}()
-	}, func() {
+	}
+	onExit := func() {
 		if commands.Quit != nil {
 			commands.Quit()
 		}
+	}
+	prepareNativeShell(func() {
+		systray.Register(onReady, onExit)
+	}, func() {
+		window = webview.New(false)
+		window.SetTitle("Claude Phone")
+		window.SetSize(1180, 760, webview.HintNone)
+		window.Navigate(pageURL)
+		C.cpConfigureWindow(unsafe.Pointer(window.Window()))
 	})
+	defer window.Destroy()
 
 	go func() {
 		select {

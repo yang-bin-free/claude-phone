@@ -52,3 +52,13 @@ func TestShutdownNativeClosesResourcesBeforeTerminatingWindow(t *testing.T) {
 		t.Fatalf("shutdown order=%v", events)
 	}
 }
+
+func TestPrepareNativeShellRegistersStatusItemBeforeWindowCreation(t *testing.T) {
+	var events []string
+	prepareNativeShell(func() { events = append(events, "register") }, func() {
+		events = append(events, "window")
+	})
+	if len(events) != 2 || events[0] != "register" || events[1] != "window" {
+		t.Fatalf("native startup order=%v", events)
+	}
+}
