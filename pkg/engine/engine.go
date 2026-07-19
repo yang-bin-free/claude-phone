@@ -127,6 +127,15 @@ func (e *Engine) Serve(ln net.Listener) error {
 
 func (e *Engine) Close() error {
 	e.closeOnce.Do(func() { close(e.stopWatch) })
+	e.mu.RLock()
+	clients := make([]*client, 0, len(e.clients))
+	for _, cl := range e.clients {
+		clients = append(clients, cl)
+	}
+	e.mu.RUnlock()
+	for _, cl := range clients {
+		_ = cl.conn.Close()
+	}
 	e.mu.Lock()
 	for _, proc := range e.procs {
 		_ = proc.Stop()

@@ -3,6 +3,7 @@ package engine
 import (
 	"encoding/json"
 	"fmt"
+	"net"
 	"net/http/httptest"
 	"testing"
 	"time"
@@ -12,6 +13,29 @@ import (
 	"github.com/yang-bin-free/claude-phone/pkg/protocol"
 	"github.com/yang-bin-free/claude-phone/pkg/session"
 )
+
+func TestEngineCloseDisconnectsWebSocketClients(t *testing.T) {
+	e := New(Config{DataDir: t.TempDir(), DeviceTokens: map[string]string{"device": "Mac"}})
+	ts := httptest.NewServer(e.Handler())
+	defer ts.Close()
+	conn, _, err := websocket.DefaultDialer.Dial("ws"+ts.URL[len("http"):] + "/ws", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+	writeJSON(t, conn, protocol.AuthMsg{Type: protocol.TypeAuth, DeviceToken: "device", DeviceName: "Mac"})
+	assertType(t, conn, protocol.TypeHello)
+
+	if err := e.Close(); err != nil {
+		t.Fatal(err)
+	}
+	_ = conn.SetReadDeadline(time.Now().Add(200 * time.Millisecond))
+	if _, _, err := conn.ReadMessage(); err == nil {
+		t.Fatal("websocket remained open after engine close")
+	} else if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
+		t.Fatal("websocket was not disconnected when engine closed")
+	}
+}
 
 func TestWebSocket_ListProjectsUsesAdminProjectStore(t *testing.T) {
 	e := New(Config{DataDir: t.TempDir(), DeviceTokens: map[string]string{"device": "Android"}})
