@@ -117,3 +117,33 @@ func TestDesktopComposerWaitsForSessionSelectionAfterReconnect(t *testing.T) {
 		}
 	}
 }
+
+func TestDesktopMessagesAreSelectable(t *testing.T) {
+	cssBytes, err := fs.ReadFile(Assets, "chat/desktop.css")
+	if err != nil {
+		t.Fatal(err)
+	}
+	css := string(cssBytes)
+	marker := ".message { max-width: 78%; margin: 0 0 16px; padding: 12px 15px; border-radius: 14px; white-space: pre-wrap; user-select: text; cursor: text; }"
+	if !strings.Contains(css, marker) {
+		t.Fatalf("message selection rule missing %q", marker)
+	}
+}
+
+func TestDesktopReturnSendsWithoutBreakingIME(t *testing.T) {
+	jsBytes, err := fs.ReadFile(Assets, "chat/chat.js")
+	if err != nil {
+		t.Fatal(err)
+	}
+	js := string(jsBytes)
+	marker := `prompt.addEventListener("keydown", event => {
+    if (event.isComposing || event.keyCode === 229) return;
+    if (event.key === "Enter" && !event.shiftKey) {
+      event.preventDefault();
+      composer.requestSubmit();
+    }
+  });`
+	if !strings.Contains(js, marker) {
+		t.Fatal("composition-safe Return-to-send handler missing")
+	}
+}

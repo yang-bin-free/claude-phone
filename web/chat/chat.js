@@ -370,7 +370,11 @@
     prompt.value = "";
   });
   prompt.addEventListener("keydown", event => {
-    if (event.metaKey && event.key === "Enter") composer.requestSubmit();
+    if (event.isComposing || event.keyCode === 229) return;
+    if (event.key === "Enter" && !event.shiftKey) {
+      event.preventDefault();
+      composer.requestSubmit();
+    }
   });
   document.addEventListener("keydown", event => {
     if (!event.metaKey) return;

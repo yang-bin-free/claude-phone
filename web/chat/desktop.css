@@ -16,10 +16,9 @@ header { border-bottom: 1px solid var(--border); display: flex; align-items: cen
 #connection-state { color: var(--muted); font-size: 13px; }
 .chat-view { min-height: 0; display: grid; grid-template-rows: minmax(0, 1fr) auto auto; }
 .messages { overflow: auto; padding: 28px max(28px, calc((100% - 820px) / 2)); }
-.message { max-width: 78%; margin: 0 0 16px; padding: 12px 15px; border-radius: 14px; white-space: pre-wrap; }
+.message { max-width: 78%; margin: 0 0 16px; padding: 12px 15px; border-radius: 14px; white-space: pre-wrap; user-select: text; cursor: text; }
 .message.user { margin-left: auto; background: #9e4f38; }
 .message.assistant { background: var(--surface-raised); }
-.message.assistant, .message.tool { user-select: text; }
 .message.tool { background: #171f2a; border: 1px solid #2d4058; color: #c6d8ef; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; }
 .message.error { background: #53272d; color: #ffbbc3; }
 .message.queued { background: var(--surface-raised); color: var(--muted); font-size: 13px; }
