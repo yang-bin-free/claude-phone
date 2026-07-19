@@ -39,6 +39,12 @@ fi
 
 menu_click "打开主窗口"
 menu_click "隐藏主窗口"
+for _ in {1..20}; do
+  if [[ "$(window_count)" == "0" ]]; then
+    break
+  fi
+  sleep 0.1
+done
 if [[ "$(window_count)" != "0" ]]; then
   printf 'expected the window to be hidden before reopen\n' >&2
   exit 1
