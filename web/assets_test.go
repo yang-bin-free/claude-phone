@@ -68,3 +68,21 @@ func TestDesktopShellHasStableStateAndNavigationHooks(t *testing.T) {
 		}
 	}
 }
+
+func TestAuthorizationFailuresUseSingletonBannerInsteadOfChatHistory(t *testing.T) {
+	jsBytes, err := fs.ReadFile(Assets, "chat/chat.js")
+	if err != nil {
+		t.Fatal(err)
+	}
+	js := string(jsBytes)
+	for _, marker := range []string{
+		`function showProtocolError(msg)`,
+		`msg.code === "DEVICE_NOT_AUTHORIZED"`,
+		"showBanner(`${msg.code}: ${msg.message}`)",
+		`showProtocolError(msg)`,
+	} {
+		if !strings.Contains(js, marker) {
+			t.Fatalf("authorization error deduplication missing %q", marker)
+		}
+	}
+}

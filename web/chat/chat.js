@@ -154,6 +154,17 @@
     });
   }
 
+  function showProtocolError(msg) {
+    if (msg.code === "DEVICE_NOT_AUTHORIZED") {
+      showBanner(`${msg.code}: ${msg.message}`);
+      connection.textContent = "设备未授权";
+      state.connected = false;
+      setComposerEnabled(false);
+      return;
+    }
+    append("error", `${msg.code}: ${msg.message}`);
+  }
+
   function handleMessage(event) {
     let msg;
     try { msg = JSON.parse(event.data); }
@@ -251,7 +262,7 @@
         send({ type: "control", action: "list_sessions", limit: 100 });
         break;
       case "error":
-        append("error", `${msg.code}: ${msg.message}`);
+        showProtocolError(msg);
         break;
     }
   }
