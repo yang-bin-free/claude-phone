@@ -45,6 +45,7 @@ func (e *fakeManagedEngine) Status() engine.StatusReport {
 func TestApplicationKeepsDesktopAliveWhenClaudeIsUnavailable(t *testing.T) {
 	app := newApplication(context.Background(), appConfig{DesktopAddr: "127.0.0.1:0", ClaudeBin: "claude", AdminToken: "token"}, appDependencies{
 		resolveClaude: func(string) (string, error) { return "", errors.New("claude missing") },
+		resolveCodex:  func(string) (string, error) { return "", errors.New("codex missing") },
 	})
 	if err := app.Start(); err != nil {
 		t.Fatal(err)
@@ -57,6 +58,37 @@ func TestApplicationKeepsDesktopAliveWhenClaudeIsUnavailable(t *testing.T) {
 	assertAppHTTPStatus(t, app.Handler(), "/", http.StatusOK)
 	assertAppHTTPStatus(t, app.Handler(), "/desktop/status", http.StatusOK)
 	assertAppHTTPStatus(t, app.Handler(), "/ws", http.StatusServiceUnavailable)
+}
+
+func TestApplicationStartsWhenOnlyCodexIsAvailable(t *testing.T) {
+	var captured engine.Config
+	app := newApplication(context.Background(), appConfig{
+		DesktopAddr: "127.0.0.1:0", ClaudeBin: "claude", CodexBin: "codex", AdminToken: "token",
+	}, appDependencies{
+		resolveClaude: func(string) (string, error) { return "", errors.New("claude missing") },
+		resolveCodex:  func(string) (string, error) { return "/tmp/codex", nil },
+		detectVersion: func(path string) (string, error) {
+			if path != "/tmp/codex" {
+				t.Fatalf("version path=%q", path)
+			}
+			return "0.144.1", nil
+		},
+		newEngine: func(cfg engine.Config) managedEngine {
+			captured = cfg
+			return &fakeManagedEngine{}
+		},
+	})
+	if err := app.Start(); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = app.Close() })
+	status := app.Status()
+	if !status.Ready || status.CodexBin != "/tmp/codex" || status.CodexVersion != "0.144.1" {
+		t.Fatalf("status=%+v", status)
+	}
+	if captured.CodexBin != "/tmp/codex" || captured.ClaudeUnavailableReason != "claude missing" {
+		t.Fatalf("engine config=%+v", captured)
+	}
 }
 
 func TestApplicationPauseAndResumeKeepsDesktopHandler(t *testing.T) {

@@ -25,6 +25,7 @@ type managedEngine interface {
 type appConfig struct {
 	DesktopAddr       string
 	ClaudeBin         string
+	CodexBin          string
 	DefaultWorkdir    string
 	DefaultPermission string
 	DataDir           string
@@ -33,6 +34,7 @@ type appConfig struct {
 
 type appDependencies struct {
 	resolveClaude func(string) (string, error)
+	resolveCodex  func(string) (string, error)
 	detectVersion func(string) (string, error)
 	newEngine     func(engine.Config) managedEngine
 	listen        func(string, string) (net.Listener, error)
@@ -62,8 +64,11 @@ func newApplication(parent context.Context, cfg appConfig, deps appDependencies)
 	if deps.resolveClaude == nil {
 		deps.resolveClaude = desktop.ResolveClaudeBinary
 	}
+	if deps.resolveCodex == nil {
+		deps.resolveCodex = desktop.ResolveCodexBinary
+	}
 	if deps.detectVersion == nil {
-		deps.detectVersion = engine.DetectClaudeVersion
+		deps.detectVersion = func(bin string) (string, error) { return engine.DetectCLIVersion(bin, "coding agent") }
 	}
 	if deps.newEngine == nil {
 		deps.newEngine = func(cfg engine.Config) managedEngine { return engine.New(cfg) }
@@ -117,35 +122,63 @@ func (a *application) Resume() error {
 		return nil
 	}
 
-	bin, err := a.deps.resolveClaude(a.cfg.ClaudeBin)
-	if err != nil {
+	claudeBin, claudeVersion, claudeErr := a.resolveProvider(a.cfg.ClaudeBin, "Claude", a.deps.resolveClaude)
+	codexBin, codexVersion, codexErr := a.resolveProvider(a.cfg.CodexBin, "Codex", a.deps.resolveCodex)
+	if claudeErr != nil && codexErr != nil {
+		err := errors.Join(claudeErr, codexErr)
 		a.setUnavailable(err, false)
-		a.emitMenuState()
-		return err
-	}
-	version, err := a.deps.detectVersion(bin)
-	if err != nil {
-		a.setUnavailable(fmt.Errorf("Claude CLI check failed: %w", err), false)
 		a.emitMenuState()
 		return err
 	}
 	desktopDeviceToken := "desktop-" + a.cfg.AdminToken
 	instance := a.deps.newEngine(engine.Config{
-		Addr:               a.cfg.DesktopAddr,
-		ClaudeBin:          bin,
-		ClaudeVersion:      version,
-		DefaultWorkingDir:  a.cfg.DefaultWorkdir,
-		DefaultPermission:  a.cfg.DefaultPermission,
-		DataDir:            a.cfg.DataDir,
-		DeviceTokens:       map[string]string{desktopDeviceToken: "Mac"},
-		DesktopDeviceToken: desktopDeviceToken,
+		Addr:                    a.cfg.DesktopAddr,
+		ClaudeBin:               firstNonEmpty(claudeBin, a.cfg.ClaudeBin, "claude"),
+		ClaudeVersion:           firstNonEmpty(claudeVersion, "unknown"),
+		ClaudeUnavailableReason: errorText(claudeErr),
+		CodexBin:                firstNonEmpty(codexBin, a.cfg.CodexBin, "codex"),
+		CodexVersion:            firstNonEmpty(codexVersion, "unknown"),
+		CodexUnavailableReason:  errorText(codexErr),
+		DefaultWorkingDir:       a.cfg.DefaultWorkdir,
+		DefaultPermission:       a.cfg.DefaultPermission,
+		DataDir:                 a.cfg.DataDir,
+		DeviceTokens:            map[string]string{desktopDeviceToken: "Mac"},
+		DesktopDeviceToken:      desktopDeviceToken,
 	})
 	a.mu.Lock()
 	a.engine = instance
-	a.status = desktop.AppStatus{Ready: true, ClaudeBin: bin, ClaudeVersion: version}
+	a.status = desktop.AppStatus{Ready: true, ClaudeBin: claudeBin, ClaudeVersion: claudeVersion, CodexBin: codexBin, CodexVersion: codexVersion}
 	a.mu.Unlock()
 	a.emitMenuState()
 	return nil
+}
+
+func (a *application) resolveProvider(requested, name string, resolve func(string) (string, error)) (string, string, error) {
+	bin, err := resolve(requested)
+	if err != nil {
+		return "", "", err
+	}
+	version, err := a.deps.detectVersion(bin)
+	if err != nil {
+		return "", "", fmt.Errorf("%s CLI check failed: %w", name, err)
+	}
+	return bin, version, nil
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		if value != "" {
+			return value
+		}
+	}
+	return ""
+}
+
+func errorText(err error) string {
+	if err == nil {
+		return ""
+	}
+	return err.Error()
 }
 
 func (a *application) Pause() error {

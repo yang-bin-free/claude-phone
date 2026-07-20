@@ -34,3 +34,16 @@ func TestClaudeDescriptorDefinesProviderSpecificPermissions(t *testing.T) {
 		t.Fatal("bypassPermissions must be marked dangerous")
 	}
 }
+
+func TestRegistryDescriptorsKeepRegistrationOrder(t *testing.T) {
+	registry := NewRegistry(
+		NewClaudeAdapter("claude"),
+		NewCodexAdapter("codex", true, ""),
+	)
+	for i := 0; i < 20; i++ {
+		descriptors := registry.Descriptors()
+		if len(descriptors) != 2 || descriptors[0].ID != ClaudeID || descriptors[1].ID != CodexID {
+			t.Fatalf("descriptor order=%+v", descriptors)
+		}
+	}
+}

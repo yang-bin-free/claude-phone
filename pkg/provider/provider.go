@@ -66,7 +66,8 @@ type OutputTranslator interface {
 }
 
 type Registry struct {
-	byID map[string]Adapter
+	byID  map[string]Adapter
+	order []string
 }
 
 func NewRegistry(adapters ...Adapter) *Registry {
@@ -76,6 +77,9 @@ func NewRegistry(adapters ...Adapter) *Registry {
 			continue
 		}
 		id := NormalizeID(adapter.Descriptor().ID)
+		if _, exists := registry.byID[id]; !exists {
+			registry.order = append(registry.order, id)
+		}
 		registry.byID[id] = adapter
 	}
 	return registry
@@ -99,8 +103,8 @@ func (r *Registry) Get(id string) (Adapter, bool) {
 
 func (r *Registry) Descriptors() []Descriptor {
 	out := make([]Descriptor, 0, len(r.byID))
-	for _, adapter := range r.byID {
-		out = append(out, adapter.Descriptor())
+	for _, id := range r.order {
+		out = append(out, r.byID[id].Descriptor())
 	}
 	return out
 }

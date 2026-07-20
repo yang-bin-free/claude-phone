@@ -17,6 +17,8 @@ type AppStatus struct {
 	Paused        bool   `json:"paused"`
 	ClaudeBin     string `json:"claudeBin,omitempty"`
 	ClaudeVersion string `json:"claudeVersion,omitempty"`
+	CodexBin      string `json:"codexBin,omitempty"`
+	CodexVersion  string `json:"codexVersion,omitempty"`
 	Error         string `json:"error,omitempty"`
 }
 

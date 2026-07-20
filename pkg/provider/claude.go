@@ -3,19 +3,28 @@ package provider
 import "github.com/yang-bin-free/claude-phone/pkg/session"
 
 type ClaudeAdapter struct {
-	bin string
+	bin               string
+	available         bool
+	unavailableReason string
 }
 
 func NewClaudeAdapter(bin string) *ClaudeAdapter {
 	if bin == "" {
 		bin = "claude"
 	}
-	return &ClaudeAdapter{bin: bin}
+	return &ClaudeAdapter{bin: bin, available: true}
+}
+
+func NewClaudeAdapterWithAvailability(bin string, available bool, unavailableReason string) *ClaudeAdapter {
+	adapter := NewClaudeAdapter(bin)
+	adapter.available = available
+	adapter.unavailableReason = unavailableReason
+	return adapter
 }
 
 func (a *ClaudeAdapter) Descriptor() Descriptor {
 	return Descriptor{
-		ID: ClaudeID, Name: "Claude Code", Available: true,
+		ID: ClaudeID, Name: "Claude Code", Available: a.available, UnavailableReason: a.unavailableReason,
 		Permissions: []PermissionOption{
 			{ID: "default", Label: "每次询问", Description: "修改文件或执行受限操作前征求同意。", Mutable: true},
 			{ID: "acceptEdits", Label: "自动接受编辑", Description: "自动接受文件编辑，其他危险操作仍会询问。", Mutable: true},

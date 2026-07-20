@@ -26,6 +26,7 @@ func main() {
 	fs := flag.NewFlagSet("codeafar", flag.ExitOnError)
 	desktopAddr := fs.String("desktop-addr", "127.0.0.1:9877", "loopback desktop listen address")
 	claudeBin := fs.String("claude-bin", "claude", "Claude CLI binary")
+	codexBin := fs.String("codex-bin", "codex", "Codex CLI binary")
 	workdir := fs.String("workdir", ".", "default Claude working directory")
 	permission := fs.String("permission", "default", "default Claude permission mode")
 	dataDir := fs.String("data-dir", "", "CodeAfar configuration directory")
@@ -49,7 +50,7 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	app := newApplication(ctx, appConfig{
-		DesktopAddr: *desktopAddr, ClaudeBin: *claudeBin, DefaultWorkdir: *workdir,
+		DesktopAddr: *desktopAddr, ClaudeBin: *claudeBin, CodexBin: *codexBin, DefaultWorkdir: *workdir,
 		DefaultPermission: *permission, DataDir: resolvedDataDir, AdminToken: token,
 	}, appDependencies{})
 	if err := app.Start(); err != nil {

@@ -86,7 +86,10 @@ func New(cfg Config) *Engine {
 		textRequestOrder:   map[string][]string{},
 		pendingPermissions: map[string]string{},
 	}
-	e.providers = provider.NewRegistry(provider.NewClaudeAdapter(cfg.ClaudeBin))
+	e.providers = provider.NewRegistry(
+		provider.NewClaudeAdapterWithAvailability(cfg.ClaudeBin, cfg.ClaudeUnavailableReason == "", cfg.ClaudeUnavailableReason),
+		provider.NewCodexAdapter(cfg.CodexBin, cfg.CodexUnavailableReason == "", cfg.CodexUnavailableReason),
+	)
 	e.updateSession = e.history.UpdateSession
 	if persisted, err := e.history.Restore(); err == nil {
 		for _, sess := range persisted {

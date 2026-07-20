@@ -11,21 +11,25 @@ import (
 const DefaultAddr = "127.0.0.1:9876"
 
 type Config struct {
-	Addr                 string
-	AgentVersion         string
-	ClaudeVersion        string
-	ClaudeBin            string
-	DefaultWorkingDir    string
-	DefaultPermission    string
-	MaxConcurrentSession int
-	WriteTimeout         time.Duration
-	DeviceTokens         map[string]string
-	DesktopDeviceToken   string
-	DataDir              string
-	ConfigPollInterval   time.Duration
-	HealthPollInterval   time.Duration
-	StalledAfter         time.Duration
-	UnresponsiveAfter    time.Duration
+	Addr                    string
+	AgentVersion            string
+	ClaudeVersion           string
+	ClaudeBin               string
+	ClaudeUnavailableReason string
+	CodexVersion            string
+	CodexBin                string
+	CodexUnavailableReason  string
+	DefaultWorkingDir       string
+	DefaultPermission       string
+	MaxConcurrentSession    int
+	WriteTimeout            time.Duration
+	DeviceTokens            map[string]string
+	DesktopDeviceToken      string
+	DataDir                 string
+	ConfigPollInterval      time.Duration
+	HealthPollInterval      time.Duration
+	StalledAfter            time.Duration
+	UnresponsiveAfter       time.Duration
 }
 
 func (c Config) withDefaults() Config {
@@ -40,6 +44,12 @@ func (c Config) withDefaults() Config {
 	}
 	if c.ClaudeBin == "" {
 		c.ClaudeBin = "claude"
+	}
+	if c.CodexVersion == "" {
+		c.CodexVersion = "unknown"
+	}
+	if c.CodexBin == "" {
+		c.CodexBin = "codex"
 	}
 	if c.DefaultWorkingDir == "" {
 		c.DefaultWorkingDir = "."

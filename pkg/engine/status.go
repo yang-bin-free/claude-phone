@@ -11,6 +11,8 @@ type StatusReport struct {
 	AgentVersion         string            `json:"agentVersion"`
 	ClaudeVersion        string            `json:"claudeVersion"`
 	ClaudeBin            string            `json:"claudeBin"`
+	CodexVersion         string            `json:"codexVersion"`
+	CodexBin             string            `json:"codexBin"`
 	DefaultWorkingDir    string            `json:"defaultWorkingDir"`
 	DefaultPermission    string            `json:"defaultPermission"`
 	MaxConcurrentSession int               `json:"maxConcurrentSession"`
@@ -81,6 +83,8 @@ func (e *Engine) Status() StatusReport {
 		AgentVersion:         e.cfg.AgentVersion,
 		ClaudeVersion:        e.cfg.ClaudeVersion,
 		ClaudeBin:            e.cfg.ClaudeBin,
+		CodexVersion:         e.cfg.CodexVersion,
+		CodexBin:             e.cfg.CodexBin,
 		DefaultWorkingDir:    runtime.DefaultWorkingDir,
 		DefaultPermission:    runtime.DefaultPermission,
 		MaxConcurrentSession: runtime.MaxConcurrentSessions,

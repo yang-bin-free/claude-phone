@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"log"
@@ -10,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/yang-bin-free/claude-phone/pkg/desktop"
 	"github.com/yang-bin-free/claude-phone/pkg/engine"
 	"github.com/yang-bin-free/claude-phone/pkg/product"
 )
@@ -44,11 +46,9 @@ func runServe(args []string) {
 	if err != nil {
 		log.Fatalf("CodeAfar data migration failed: %v", err)
 	}
-	version, err := engine.DetectClaudeVersion(cfg.ClaudeBin)
-	if err != nil {
-		log.Fatalf("Claude CLI check failed: %v", err)
+	if err := resolveServeProviders(&cfg, desktop.ResolveClaudeBinary, desktop.ResolveCodexBinary, engine.DetectCLIVersion); err != nil {
+		log.Fatalf("coding agent CLI check failed: %v", err)
 	}
-	cfg.ClaudeVersion = version
 
 	e := engine.New(cfg)
 	if network.Enabled() {
@@ -83,6 +83,7 @@ func parseServeConfig(args []string) (engine.Config, tsnetOptions, error) {
 	fs := flag.NewFlagSet("codeafar-agent", flag.ContinueOnError)
 	addr := fs.String("addr", engine.DefaultAddr, "HTTP/WebSocket listen address")
 	claudeBin := fs.String("claude-bin", "claude", "Claude CLI binary")
+	codexBin := fs.String("codex-bin", "codex", "Codex CLI binary")
 	workdir := fs.String("workdir", ".", "default Claude working directory")
 	permission := fs.String("permission", "default", "default Claude permission mode")
 	dataDir := fs.String("data-dir", "", "CodeAfar configuration directory")
@@ -97,6 +98,7 @@ func parseServeConfig(args []string) (engine.Config, tsnetOptions, error) {
 	return engine.Config{
 			Addr:              *addr,
 			ClaudeBin:         *claudeBin,
+			CodexBin:          *codexBin,
 			DefaultWorkingDir: *workdir,
 			DefaultPermission: *permission,
 			DataDir:           *dataDir,
@@ -106,6 +108,32 @@ func parseServeConfig(args []string) (engine.Config, tsnetOptions, error) {
 			AuthKey:    *tsnetAuthKey,
 			ControlURL: *tsnetControlURL,
 		}, nil
+}
+
+func resolveServeProviders(cfg *engine.Config, resolveClaude, resolveCodex func(string) (string, error), detectVersion func(string, string) (string, error)) error {
+	claudeBin, claudeErr := resolveClaude(cfg.ClaudeBin)
+	if claudeErr == nil {
+		cfg.ClaudeBin = claudeBin
+		cfg.ClaudeVersion, claudeErr = detectVersion(claudeBin, "Claude")
+	}
+	codexBin, codexErr := resolveCodex(cfg.CodexBin)
+	if codexErr == nil {
+		cfg.CodexBin = codexBin
+		cfg.CodexVersion, codexErr = detectVersion(codexBin, "Codex")
+	}
+	cfg.ClaudeUnavailableReason = errorText(claudeErr)
+	cfg.CodexUnavailableReason = errorText(codexErr)
+	if claudeErr != nil && codexErr != nil {
+		return errors.Join(claudeErr, codexErr)
+	}
+	return nil
+}
+
+func errorText(err error) string {
+	if err == nil {
+		return ""
+	}
+	return err.Error()
 }
 
 func runStatus(args []string) {

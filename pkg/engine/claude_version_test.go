@@ -10,3 +10,10 @@ func TestClaudeVersionPattern(t *testing.T) {
 		}
 	}
 }
+
+func TestCLIVersionPatternSupportsCodex(t *testing.T) {
+	match := cliVersionPattern.FindStringSubmatch("codex-cli 0.144.1")
+	if len(match) != 2 || match[1] != "0.144.1" {
+		t.Fatalf("match=%v", match)
+	}
+}

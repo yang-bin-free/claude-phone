@@ -4,6 +4,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/yang-bin-free/claude-phone/pkg/provider"
 )
 
 func TestConfigDefaultsDoNotHideMigrationErrors(t *testing.T) {
@@ -27,6 +29,22 @@ func TestConfigDefaultsDoNotHideMigrationErrors(t *testing.T) {
 	}
 	if _, err := os.Stat(want); !os.IsNotExist(err) {
 		t.Fatalf("withDefaults unexpectedly created data directory: %v", err)
+	}
+}
+
+func TestDefaultRegistryContainsClaudeAndCodexDescriptors(t *testing.T) {
+	e := New(Config{
+		DataDir: t.TempDir(), ClaudeBin: "claude", CodexBin: "codex",
+		CodexUnavailableReason: "codex missing",
+	})
+	defer e.Close()
+	claude, claudeOK := e.providers.Get(provider.ClaudeID)
+	codex, codexOK := e.providers.Get(provider.CodexID)
+	if !claudeOK || !claude.Descriptor().Available {
+		t.Fatalf("Claude descriptor=%+v ok=%v", claude, claudeOK)
+	}
+	if !codexOK || codex.Descriptor().Available || codex.Descriptor().UnavailableReason != "codex missing" {
+		t.Fatalf("Codex descriptor=%+v ok=%v", codex, codexOK)
 	}
 }
 
