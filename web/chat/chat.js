@@ -109,8 +109,9 @@
   }
 
   function currentProvider() {
-    const id = providerSelect.value || state.providers.find(item => item.available)?.id || "claude";
-    return state.providers.find(item => item.id === id);
+    const id = isDraft() ? providerSelect.value : state.selectedSession?.provider;
+    const resolvedID = id || state.providers.find(item => item.available)?.id || "claude";
+    return state.providers.find(item => item.id === resolvedID);
   }
 
   function providerName(id) {
@@ -307,11 +308,10 @@
       const label = option.dangerous ? `${option.label} ⚠` : option.label;
       permissionSelect.add(new Option(label, option.id));
     });
+    const fallback = descriptor?.permissions?.find(option => option.id === "default")?.id || descriptor?.permissions?.[0]?.id || "";
     if ([...permissionSelect.options].some(option => option.value === selected)) permissionSelect.value = selected;
-    else if ([...permissionSelect.options].some(option => option.value === "default")) permissionSelect.value = "default";
-	else if ([...permissionSelect.options].some(option => option.value === "workspaceWrite")) permissionSelect.value = "workspaceWrite";
-	else if (permissionSelect.options.length) permissionSelect.selectedIndex = 0;
-	if (isDraft()) state.draft.permissionMode = permissionSelect.value;
+    else permissionSelect.value = fallback;
+    if (isDraft()) state.draft.permissionMode = permissionSelect.value;
     updateControls();
   }
 

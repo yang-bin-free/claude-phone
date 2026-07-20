@@ -81,6 +81,8 @@ func TestProviderPickerDisablesUnavailableEnginesAndSynchronizesPermissions(t *t
 		`state.draft.permissionMode = permissionSelect.value`,
 		`function providerName(id)`,
 		`providerName(state.selectedSession.provider)`,
+		`const id = isDraft() ? providerSelect.value : state.selectedSession?.provider`,
+		`descriptor?.permissions?.[0]?.id`,
 	} {
 		if !strings.Contains(js, marker) {
 			t.Errorf("provider picker behavior missing %q", marker)

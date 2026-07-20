@@ -152,7 +152,7 @@ func TestCodexProcReportsBoundedProcessFailure(t *testing.T) {
 	}
 	select {
 	case got := <-result:
-		if !strings.Contains(got, "simulated Codex failure") || len(got) > 2300 {
+		if strings.Contains(got, "simulated Codex failure") || !strings.Contains(got, "exit status 7") || len(got) > 2300 {
 			t.Fatalf("process error = %q", got)
 		}
 	case <-time.After(3 * time.Second):
@@ -167,4 +167,49 @@ func TestCodexProcReportsBoundedProcessFailure(t *testing.T) {
 		t.Fatal("timed out waiting for Codex failure completion")
 	}
 	_ = proc.Stop()
+}
+
+func TestReadBoundedStderrDrainsInputAfterCaptureLimit(t *testing.T) {
+	reader := strings.NewReader(strings.Repeat("x\n", codexMaxStderrBytes))
+	got := readBoundedStderr(reader)
+	if len(got) > codexMaxStderrBytes {
+		t.Fatalf("captured stderr length=%d", len(got))
+	}
+	if reader.Len() != 0 {
+		t.Fatalf("stderr reader left %d bytes undrained", reader.Len())
+	}
+}
+
+func TestCodexProcOversizedOutputFinishesTurnWithoutLeakingOrDeadlocking(t *testing.T) {
+	for _, prompt := range []string{"HUGE_STDERR", "HUGE_STDOUT"} {
+		t.Run(prompt, func(t *testing.T) {
+			proc := NewCodexProc(CodexConfig{Bin: "../../testdata/fake-codex.sh", Cwd: ".", Permission: "readOnly"})
+			messages := make(chan string, 2)
+			proc.OnOutput(func(payload []byte) {
+				if strings.Contains(string(payload), `"type":"error"`) || strings.Contains(string(payload), `"type":"done"`) {
+					messages <- string(payload)
+				}
+			})
+			if err := proc.Start(); err != nil {
+				t.Fatal(err)
+			}
+			if err := proc.Send(prompt); err != nil {
+				t.Fatal(err)
+			}
+			for index := 0; index < 2; index++ {
+				select {
+				case message := <-messages:
+					if strings.Contains(message, strings.Repeat("s", 32)) {
+						t.Fatalf("raw stderr leaked: %.100q", message)
+					}
+				case <-time.After(5 * time.Second):
+					t.Fatalf("%s deadlocked before terminal messages", prompt)
+				}
+			}
+			if err := proc.Send("after oversized output"); err != nil {
+				t.Fatalf("process did not release turn: %v", err)
+			}
+			_ = proc.Stop()
+		})
+	}
 }

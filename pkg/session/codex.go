@@ -185,8 +185,11 @@ func (p *CodexProc) readTurn(cmd *exec.Cmd, stdout, stderr io.ReadCloser) {
 		p.emit(line)
 	}
 	scanErr := scanner.Err()
+	if scanErr != nil {
+		_, _ = io.Copy(io.Discard, stdout)
+	}
 	waitErr := cmd.Wait()
-	stderrText := <-stderrDone
+	_ = <-stderrDone
 
 	p.mu.Lock()
 	stopped := p.stopped
@@ -206,11 +209,7 @@ func (p *CodexProc) readTurn(cmd *exec.Cmd, stdout, stderr io.ReadCloser) {
 		return
 	}
 	if waitErr != nil {
-		message := strings.TrimSpace(stderrText)
-		if message == "" {
-			message = waitErr.Error()
-		}
-		p.emitFailure(message)
+		p.emitFailure("Codex process failed: " + waitErr.Error())
 		return
 	}
 	p.emitFailure("Codex ended without a terminal event")
@@ -253,23 +252,8 @@ func (p *CodexProc) emitFailure(message string) {
 }
 
 func readBoundedStderr(reader io.Reader) string {
-	scanner := bufio.NewScanner(reader)
-	scanner.Buffer(make([]byte, 0, 4096), codexMaxLineBytes)
 	var out strings.Builder
-	for scanner.Scan() {
-		line := scanner.Text()
-		remaining := codexMaxStderrBytes - out.Len()
-		if remaining <= 0 {
-			break
-		}
-		if out.Len() > 0 {
-			out.WriteByte('\n')
-			remaining = codexMaxStderrBytes - out.Len()
-		}
-		if len(line) > remaining {
-			line = line[:remaining]
-		}
-		out.WriteString(line)
-	}
+	_, _ = io.Copy(&out, io.LimitReader(reader, codexMaxStderrBytes))
+	_, _ = io.Copy(io.Discard, reader)
 	return out.String()
 }

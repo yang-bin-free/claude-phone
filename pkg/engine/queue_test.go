@@ -2,6 +2,7 @@ package engine
 
 import (
 	"encoding/json"
+	"errors"
 	"testing"
 
 	"github.com/yang-bin-free/claude-phone/pkg/protocol"
@@ -53,3 +54,36 @@ func TestHandleProcOutputUsesSelectedProviderTranslator(t *testing.T) {
 		t.Fatalf("message=%+v", message)
 	}
 }
+
+func TestProviderSessionIdentityRetriesAfterPersistenceFailure(t *testing.T) {
+	e := New(Config{DataDir: t.TempDir()})
+	defer e.Close()
+	sess := session.NewSession("codex-retry", "Codex", ".", "owner")
+	e.manager.Restore(sess)
+	proc := &identityStubProc{id: "thread-retry"}
+	e.procs[sess.ID] = proc
+	attempts := 0
+	e.updateSession = func(*session.Session) error {
+		attempts++
+		if attempts == 1 {
+			return errors.New("disk full")
+		}
+		return nil
+	}
+
+	e.handleProcOutput(sess, proc, []byte(`{"type":"thread.started"}`))
+	if got := sess.ProviderSessionIdentity(); got != "" {
+		t.Fatalf("identity after failed persistence=%q", got)
+	}
+	e.handleProcOutput(sess, proc, []byte(`{"type":"turn.started"}`))
+	if got := sess.ProviderSessionIdentity(); got != "thread-retry" || attempts != 2 {
+		t.Fatalf("identity=%q attempts=%d", got, attempts)
+	}
+}
+
+type identityStubProc struct {
+	stubClaudeProc
+	id string
+}
+
+func (p *identityStubProc) ProviderSessionID() string { return p.id }

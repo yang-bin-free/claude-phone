@@ -86,12 +86,24 @@ func (s *Session) PermissionMode() string {
 // SetProviderSessionID records an upstream provider conversation ID and
 // reports whether it changed. Empty IDs are never accepted.
 func (s *Session) SetProviderSessionID(id string) bool {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if id == "" || s.providerSessionID == id {
+	if id == "" {
 		return false
 	}
-	s.providerSessionID = id
+	s.mu.RLock()
+	current := s.providerSessionID
+	s.mu.RUnlock()
+	return s.CompareAndSwapProviderSessionID(current, id)
+}
+
+// CompareAndSwapProviderSessionID atomically replaces an observed upstream ID.
+// The replacement may be empty so callers can roll back failed persistence.
+func (s *Session) CompareAndSwapProviderSessionID(expected, replacement string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.providerSessionID != expected || expected == replacement {
+		return false
+	}
+	s.providerSessionID = replacement
 	return true
 }
 
