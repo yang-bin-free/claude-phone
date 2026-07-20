@@ -32,7 +32,7 @@ func (e *Engine) handleProcOutput(sess *session.Session, proc claudeProc, payloa
 			}
 		}
 	}
-	translated := translateClaudeOutput(payload)
+	translated := e.translateOutput(sess, payload)
 	for _, message := range translated {
 		_ = e.history.Append(sess.ID, message)
 		sess.Broadcast(message)
@@ -56,6 +56,15 @@ func (e *Engine) handleProcOutput(sess *session.Session, proc claudeProc, payloa
 			}
 		}
 	}
+}
+
+func (e *Engine) translateOutput(sess *session.Session, payload []byte) [][]byte {
+	if adapter, ok := e.providers.Get(sess.Provider); ok {
+		if translator, ok := adapter.(provider.OutputTranslator); ok {
+			return translator.TranslateOutput(payload)
+		}
+	}
+	return translateClaudeOutput(payload)
 }
 
 func (e *Engine) advanceQueue(sess *session.Session, proc claudeProc) {

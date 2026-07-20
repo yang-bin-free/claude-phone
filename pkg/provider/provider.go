@@ -58,6 +58,13 @@ type Adapter interface {
 	NewProcess(SessionConfig) Process
 }
 
+// OutputTranslator converts a provider's native event stream into CodeAfar's
+// shared WebSocket protocol. Providers without one use the legacy Claude
+// translator in the engine.
+type OutputTranslator interface {
+	TranslateOutput(payload []byte) [][]byte
+}
+
 type Registry struct {
 	byID map[string]Adapter
 }

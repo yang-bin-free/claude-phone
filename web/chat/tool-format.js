@@ -3,6 +3,7 @@
     Read: ["读取文件", "file_path"],
     Write: ["写入文件", "file_path"],
     Edit: ["编辑文件", "file_path"],
+    Delete: ["删除文件", "file_path"],
     MultiEdit: ["编辑文件", "file_path"],
     NotebookEdit: ["编辑笔记", "notebook_path"],
     Bash: ["执行命令", "command"],

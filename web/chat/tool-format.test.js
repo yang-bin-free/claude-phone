@@ -14,3 +14,8 @@ test("unknown and prototype-named tools always have a safe fallback", () => {
   assert.equal(formatToolUse("__proto__", "{}"), "🔧 __proto__");
   assert.equal(formatToolUse("CustomTool", "raw input"), "🔧 CustomTool\nraw input");
 });
+
+test("formats Codex file and MCP tools", () => {
+  assert.equal(formatToolUse("Delete", '{"file_path":"old.txt"}'), "🔧 删除文件\nold.txt");
+  assert.equal(formatToolUse("MCP · github/search", '{"q":"repo"}'), '🔧 MCP · github/search\n{\n  "q": "repo"\n}');
+});
