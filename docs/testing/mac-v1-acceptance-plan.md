@@ -4,17 +4,17 @@
 
 Mac V1 is releasable only when every `P0` and `P1` case below passes on the
 packaged application, `make verify` passes, the installed bundle passes
-`codesign --verify --deep --strict`, and no Claude Phone or `caffeinate` child
+`codesign --verify --deep --strict`, and no CodeAfar or `caffeinate` child
 process is left behind after Quit. A failed case reopens the release: fix it,
 add a regression test, rebuild, and rerun the entire plan from a clean install.
 
 ## Test environment
 
 - macOS 12 or newer, Apple Silicon or Intel as available.
-- Packaged `Claude Phone.app`, not an unbundled Go executable.
+- Packaged `CodeAfar.app`, not an unbundled Go executable.
 - Real installed Claude Code for one end-to-end response; fake Claude for
   deterministic streaming and failure injection.
-- Isolated data directory for destructive tests. Existing `~/.claude-phone`
+- Isolated data directory for destructive tests. Existing `~/.codeafar`
   data is never deleted or overwritten.
 - Autostart state is captured before testing and restored afterward.
 
@@ -72,8 +72,7 @@ add a regression test, rebuild, and rerun the entire plan from a clean install.
 
 ## Required release artifacts
 
-- `build/Claude Phone.app`
-- `build/release/claude-phone-macos-<version>.zip`
+- `build/CodeAfar.app`
+- `build/release/codeafar-macos-<version>.zip`
 - `build/release/SHA256SUMS`
-- `.gstack/qa-reports/qa-report-claude-phone-mac-<date>.md`
-
+- `.gstack/qa-reports/qa-report-codeafar-mac-<date>.md`

@@ -1,4 +1,4 @@
-.PHONY: test test-race build-mac build-agent mac-app verify-mac-app mac-release android-aar android-apk ios-framework ios-validate release verify
+.PHONY: test test-race build-mac build-agent mac-app verify-mac-app install-mac-app mac-release android-aar android-apk ios-framework ios-validate release verify
 
 test:
 	go test ./...
@@ -28,6 +28,9 @@ verify-mac-app:
 	if grep -R -a -F "$$(pwd)" "$$app" >/dev/null; then echo "bundle contains workspace path" >&2; exit 1; fi; \
 	if codesign -dv "$$app" >/dev/null 2>&1; then codesign --verify --deep --strict "$$app"; fi; \
 	echo "Verified $$app"
+
+install-mac-app: mac-app verify-mac-app
+	./scripts/install-mac-app.sh
 
 mac-release:
 	MAC_ONLY=1 ./scripts/package-release.sh
