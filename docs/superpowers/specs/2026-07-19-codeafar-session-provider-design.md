@@ -1,7 +1,7 @@
 # CodeAfar 品牌、会话创建与多引擎设计
 
 **日期：** 2026-07-19  
-**状态：** 待书面确认  
+**状态：** 已确认
 **产品名：** CodeAfar  
 **副标题：** Run locally. Code from anywhere.
 
