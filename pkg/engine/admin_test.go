@@ -42,6 +42,20 @@ func TestAdminHandlerRejectsUnauthorizedOrRemoteRequests(t *testing.T) {
 	}
 }
 
+func TestAdminStatusIncludesBothProviderVersions(t *testing.T) {
+	e := New(Config{DataDir: t.TempDir(), ClaudeVersion: "2.1.2", ClaudeBin: "/tools/claude", CodexVersion: "0.144.1", CodexBin: "/tools/codex"})
+	defer e.Close()
+	w := httptest.NewRecorder()
+	e.AdminHandler("secret").ServeHTTP(w, adminRequest(http.MethodGet, "/admin/status", "", "secret"))
+	var snapshot adminproto.Snapshot
+	if err := json.NewDecoder(w.Body).Decode(&snapshot); err != nil {
+		t.Fatal(err)
+	}
+	if snapshot.Agent.CodexVersion != "0.144.1" || snapshot.Agent.CodexBin != "/tools/codex" {
+		t.Fatalf("agent status=%+v", snapshot.Agent)
+	}
+}
+
 func TestAdminHandlerPersistsAndDeletesProjects(t *testing.T) {
 	dataDir := t.TempDir()
 	projectDir := t.TempDir()

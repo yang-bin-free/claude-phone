@@ -68,6 +68,8 @@ type AgentStatus struct {
 	AgentVersion         string            `json:"agentVersion"`
 	ClaudeVersion        string            `json:"claudeVersion"`
 	ClaudeBin            string            `json:"claudeBin"`
+	CodexVersion         string            `json:"codexVersion"`
+	CodexBin             string            `json:"codexBin"`
 	DefaultWorkingDir    string            `json:"defaultWorkingDir"`
 	DefaultPermission    string            `json:"defaultPermission"`
 	MaxConcurrentSession int               `json:"maxConcurrentSession"`

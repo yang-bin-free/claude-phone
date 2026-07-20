@@ -277,7 +277,8 @@ func adminStatus(status StatusReport) adminproto.AgentStatus {
 	}
 	return adminproto.AgentStatus{
 		Addr: status.Addr, AgentVersion: status.AgentVersion, ClaudeVersion: status.ClaudeVersion,
-		ClaudeBin: status.ClaudeBin, DefaultWorkingDir: status.DefaultWorkingDir,
+		ClaudeBin: status.ClaudeBin, CodexVersion: status.CodexVersion, CodexBin: status.CodexBin,
+		DefaultWorkingDir: status.DefaultWorkingDir,
 		DefaultPermission: status.DefaultPermission, MaxConcurrentSession: status.MaxConcurrentSession,
 		ConnectedDevices: status.ConnectedDevices, Sessions: sessions,
 	}

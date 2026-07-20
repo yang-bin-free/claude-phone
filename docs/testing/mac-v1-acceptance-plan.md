@@ -12,8 +12,8 @@ add a regression test, rebuild, and rerun the entire plan from a clean install.
 
 - macOS 12 or newer, Apple Silicon or Intel as available.
 - Packaged `CodeAfar.app`, not an unbundled Go executable.
-- Real installed Claude Code for one end-to-end response; fake Claude for
-  deterministic streaming and failure injection.
+- Real installed Claude Code and Codex for provider end-to-end responses;
+  deterministic fake CLIs for streaming, resume and failure injection.
 - Isolated data directory for destructive tests. Existing `~/.codeafar`
   data is never deleted or overwritten.
 - Autostart state is captured before testing and restored afterward.
@@ -39,16 +39,19 @@ add a regression test, rebuild, and rerun the entire plan from a clean install.
 | CHAT-04 | P0 | Restart and restore | App restart restores session list, selected history and send readiness | before/after state |
 | CHAT-05 | P1 | Multiple sessions | Switching sessions keeps histories isolated and selects the correct process | UI and persisted files |
 | CHAT-06 | P1 | Long/multiline input | Unicode and multiline input round-trip without truncation or broken layout | transcript and screenshot |
+| CHAT-07 | P0 | Codex multi-turn and restart | Codex tool event is readable, second turn retains context, and app restart resumes the persisted Codex thread | `CODEAFAR_REAL_CODEX=1` E2E and installed UI transcript |
+| CHAT-08 | P1 | Provider-specific creation | New-session selector disables unavailable providers and switches to valid permissions for Claude/Codex; provider is fixed after creation | UI assertions and process args |
 | ADMIN-01 | P1 | Project CRUD | Add/update/remove project persists and controls the new-session selector | admin UI and YAML |
 | ADMIN-02 | P1 | Template CRUD | Add/update/remove template persists and inserts the correct prompt | admin UI and YAML |
 | ADMIN-03 | P1 | Permission rules | Rule changes persist and are passed to newly created sessions | admin UI and process args/test |
 | ADMIN-04 | P1 | Runtime settings | Valid settings apply; invalid directory, permission and limits are rejected | HTTP/UI response and YAML |
-| ADMIN-05 | P1 | Diagnostics content | Claude version/path, devices, sessions and health counts match runtime | UI vs process/status audit |
+| ADMIN-05 | P1 | Diagnostics content | Claude/Codex versions and paths, devices, sessions and health counts match runtime | UI vs process/status audit |
 | ERR-01 | P0 | Claude CLI missing | App stays open and shows an actionable unavailable message; Resume can recover | screenshot and status |
 | ERR-02 | P1 | Claude CLI exits early | User sees an error instead of a permanently busy session | UI and injected stderr |
 | ERR-03 | P1 | Unauthorized browser client | Connection is rejected once with a stable message; no unbounded duplicate banners | DOM and console |
 | ERR-04 | P1 | Port already occupied | Launch fails visibly and leaves no partial background process | exit/log/process audit |
 | ERR-05 | P1 | Invalid/corrupt persisted data | App starts with a clear error or safe defaults and does not destroy the file | backup, UI/log and checksum |
+| ERR-06 | P0 | One provider missing | App remains ready when either Claude or Codex is usable; the missing provider is visible but disabled with a reason | status, provider list and UI screenshot |
 | SEC-01 | P0 | Loopback boundary | Desktop server binds only to loopback and rejects non-loopback configuration | listener and unit tests |
 | SEC-02 | P0 | Admin/device authorization | Missing or wrong tokens cannot access WebSocket/admin endpoints | HTTP/WebSocket assertions |
 | SEC-03 | P1 | Secret scan | No token, key or credential is present in tracked changes or release metadata | repository scan |
@@ -62,7 +65,7 @@ add a regression test, rebuild, and rerun the entire plan from a clean install.
 2. Run package/build gates and install the resulting bundle.
 3. Run lifecycle and menu cases against the installed application.
 4. Run deterministic chat cases with fake Claude in an isolated data directory.
-5. Run one real-Claude end-to-end prompt and restart/restore it.
+5. Run real Claude and Codex end-to-end prompts; for Codex, verify tool translation, multi-turn context and restart/resume.
 6. Run administration and persisted-data cases.
 7. Run failure injection and authorization cases.
 8. Audit processes, restore autostart, verify the release ZIP, and rerun

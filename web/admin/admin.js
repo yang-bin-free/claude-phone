@@ -14,7 +14,7 @@
     const { agent, devices, projects, diagnostics, permissionRules, templates } = await response.json();
     document.querySelector("#metrics").innerHTML = [
       ["在线设备", agent.connectedDevices?.length || 0], ["活跃会话", agent.sessions?.length || 0],
-      ["Agent", agent.agentVersion], ["Claude", agent.claudeVersion],
+      ["Agent", agent.agentVersion], ["Claude", agent.claudeVersion], ["Codex", agent.codexVersion],
       ["运行时间", `${diagnostics.uptimeSeconds}s`], ["内存", `${Math.round(diagnostics.allocBytes / 1048576)} MB`],
       ["Goroutine", diagnostics.goroutines], ["平台", `${diagnostics.goos}/${diagnostics.goarch}`],
       ["防睡眠", diagnostics.caffeinating ? "已启用" : "空闲"]
