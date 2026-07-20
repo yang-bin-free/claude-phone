@@ -45,21 +45,14 @@ if grep -RInE --exclude='*.md' --exclude='project.pbxproj' '(tskey-auth-[A-Za-z0
 fi
 
 bash -n scripts/build-ios-framework.sh scripts/validate-ios-project.sh
-swiftc_bin="$(command -v swiftc || true)"
-if [[ -x /Library/Developer/CommandLineTools/usr/bin/swiftc ]]; then
-  swiftc_bin=/Library/Developer/CommandLineTools/usr/bin/swiftc
-fi
-if [[ -n "${swiftc_bin}" ]]; then
-  while IFS= read -r source; do "${swiftc_bin}" -parse "${source}"; done < <(find ios -name '*.swift' -type f | sort)
-fi
-if [[ -x /Library/Developer/CommandLineTools/usr/bin/swiftc ]]; then
-  swift_cache="${TMPDIR:-/tmp}/codeafar-swift-cache"
-  mkdir -p "${swift_cache}"
-  core_sources="$(find ios/Shared ios/ClaudePhone/Networking ios/ClaudePhone/Stores ios/ClaudePhone/Speech -name '*.swift' -type f | sort)"
-  DEVELOPER_DIR=/Library/Developer/CommandLineTools CLANG_MODULE_CACHE_PATH="${swift_cache}" SWIFT_MODULE_CACHE_PATH="${swift_cache}" \
-    /usr/bin/xcrun swiftc -typecheck -module-name ClaudePhoneCore ${core_sources}
-  tunnel_sources="$(find ios/Shared ios/ClaudePhoneTunnel -name '*.swift' -type f | sort)"
-  DEVELOPER_DIR=/Library/Developer/CommandLineTools CLANG_MODULE_CACHE_PATH="${swift_cache}" SWIFT_MODULE_CACHE_PATH="${swift_cache}" \
-    /usr/bin/xcrun swiftc -typecheck -module-name ClaudePhoneTunnel ${tunnel_sources}
+if DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer xcrun --sdk iphonesimulator --show-sdk-path >/dev/null 2>&1; then
+  DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer xcodebuild build -quiet \
+    -project ios/ClaudePhone.xcodeproj -scheme ClaudePhone \
+    -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO
+else
+  swiftc_bin="$(command -v swiftc || true)"
+  if [[ -n "${swiftc_bin}" ]]; then
+    while IFS= read -r source; do "${swiftc_bin}" -parse "${source}"; done < <(find ios -name '*.swift' -type f | sort)
+  fi
 fi
 echo "iOS project structure OK"

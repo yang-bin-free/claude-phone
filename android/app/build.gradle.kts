@@ -42,4 +42,5 @@ tasks.named("preBuild") { dependsOn(syncWebAssets) }
 dependencies {
     // gomobile 生成的 .aar
     implementation(files("../../build/claudelib.aar"))
+    testImplementation("junit:junit:4.13.2")
 }

@@ -19,7 +19,6 @@ import android.widget.Button
 import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.TextView
-import android.speech.RecognizerIntent
 import org.json.JSONObject
 
 class MainActivity : Activity() {
@@ -29,6 +28,28 @@ class MainActivity : Activity() {
     private lateinit var deviceToken: EditText
     private lateinit var controlUrl: EditText
     private var currentWebView: WebView? = null
+    private val speechController by lazy {
+        OnDeviceSpeechController(this, object : VoiceCallbacks {
+            override fun onText(text: String, final: Boolean) {
+                currentWebView?.evaluateJavascript(
+                    "window.codeAfar.setVoiceText(${JSONObject.quote(text)}, $final)", null
+                )
+            }
+
+            override fun onState(state: VoiceState) {
+                val (name, message) = when (state) {
+                    VoiceState.Idle -> "idle" to ""
+                    VoiceState.Listening -> "listening" to "正在聆听…"
+                    VoiceState.Processing -> "processing" to "正在处理…"
+                    is VoiceState.Unavailable -> "unavailable" to state.message
+                    is VoiceState.Failed -> "failed" to state.message
+                }
+                currentWebView?.evaluateJavascript(
+                    "window.codeAfar.setVoiceState(${JSONObject.quote(name)}, ${JSONObject.quote(message)})", null
+                )
+            }
+        })
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -114,10 +135,6 @@ class MainActivity : Activity() {
         if (requestCode == VPN_REQUEST_CODE && resultCode == RESULT_OK) {
             startVpnAndOpenChat()
         }
-        if (requestCode == VOICE_REQUEST_CODE && resultCode == RESULT_OK) {
-            val text = data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)?.firstOrNull().orEmpty()
-            currentWebView?.evaluateJavascript("window.claudePhone.setPrompt(${JSONObject.quote(text)})", null)
-        }
     }
 
     private fun startVpnAndOpenChat() {
@@ -188,7 +205,7 @@ class MainActivity : Activity() {
         fun startVoice() {
             runOnUiThread {
                 if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
-                    launchVoiceRecognition()
+                    speechController.toggle()
                 } else {
                     requestPermissions(arrayOf(Manifest.permission.RECORD_AUDIO), AUDIO_PERMISSION_CODE)
                 }
@@ -199,16 +216,19 @@ class MainActivity : Activity() {
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
         if (requestCode == AUDIO_PERMISSION_CODE && grantResults.firstOrNull() == PackageManager.PERMISSION_GRANTED) {
-            launchVoiceRecognition()
+            speechController.toggle()
+        } else if (requestCode == AUDIO_PERMISSION_CODE) {
+            currentWebView?.evaluateJavascript(
+                "window.codeAfar.setVoiceState(\"denied\", \"没有麦克风权限，请在系统设置中允许访问\")", null
+            )
         }
     }
 
-    private fun launchVoiceRecognition() {
-        val voiceIntent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
-            putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-            putExtra(RecognizerIntent.EXTRA_PROMPT, "说出要发送给 Claude 的内容")
-        }
-        startActivityForResult(voiceIntent, VOICE_REQUEST_CODE)
+    override fun onDestroy() {
+        speechController.destroy()
+        currentWebView?.destroy()
+        currentWebView = null
+        super.onDestroy()
     }
 
     companion object {
@@ -217,7 +237,6 @@ class MainActivity : Activity() {
         private const val KEY_MAC_ADDRESS = "mac_address"
         private const val KEY_CONTROL_URL = "control_url"
         private const val KEY_DEVICE_TOKEN = "device_token"
-        private const val VOICE_REQUEST_CODE = 101
         private const val AUDIO_PERMISSION_CODE = 102
     }
 }

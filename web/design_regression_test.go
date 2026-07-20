@@ -225,3 +225,28 @@ func TestChatScriptExposesCodeAfarBridgeWithLegacyAlias(t *testing.T) {
 		}
 	}
 }
+
+func TestVoiceDraftAppendsWithoutSubmitting(t *testing.T) {
+	jsBytes, err := fs.ReadFile(Assets, "chat/chat.js")
+	if err != nil {
+		t.Fatal(err)
+	}
+	js := string(jsBytes)
+	for _, marker := range []string{
+		`voiceBase: ""`, `state.voiceBase = prompt.value`,
+		`const separator = state.voiceBase && value`,
+		"prompt.value = `${state.voiceBase}${separator}${value || \"\"}`",
+	} {
+		if !strings.Contains(js, marker) {
+			t.Errorf("voice draft behavior missing %q", marker)
+		}
+	}
+	start := strings.Index(js, "setVoiceText(value")
+	end := strings.Index(js[start:], "setVoiceState(")
+	if start < 0 || end < 0 {
+		t.Fatal("voice bridge methods are missing")
+	}
+	if strings.Contains(js[start:start+end], "requestSubmit") || strings.Contains(js[start:start+end], `send({ type: "text"`) {
+		t.Fatal("voice transcript must not submit itself")
+	}
+}

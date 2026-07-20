@@ -4,7 +4,7 @@
     assistantChunk: null, pendingTokens: "", tokenFrame: 0,
     sessions: [], projects: [], providers: [], templates: [],
     engineReady: false, connected: false, sessionReady: false,
-    draft: null, selectedSession: null
+    draft: null, selectedSession: null, voiceBase: ""
   };
   const messages = document.querySelector("#messages");
   const connection = document.querySelector("#connection-state");
@@ -108,7 +108,12 @@
     showChat,
     showAdmin,
     setPrompt(value) { prompt.value = value || ""; prompt.dispatchEvent(new Event("input")); prompt.focus(); },
-    setVoiceText(value) { prompt.value = value || ""; prompt.dispatchEvent(new Event("input")); prompt.focus(); },
+    setVoiceText(value) {
+      const separator = state.voiceBase && value && !/\s$/.test(state.voiceBase) ? " " : "";
+      prompt.value = `${state.voiceBase}${separator}${value || ""}`;
+      prompt.dispatchEvent(new Event("input"));
+      prompt.focus();
+    },
     setVoiceState(next, message) {
       const button = document.querySelector("#voice-mobile");
       button.dataset.state = next || "idle";
@@ -604,6 +609,8 @@
     if (window.AndroidBridge?.openSettings) AndroidBridge.openSettings();
   });
   document.querySelector("#voice-mobile").addEventListener("click", () => {
+    const button = document.querySelector("#voice-mobile");
+    if (!["listening", "processing"].includes(button.dataset.state)) state.voiceBase = prompt.value;
     if (window.AndroidBridge?.startVoice) AndroidBridge.startVoice();
   });
   projectSelect.addEventListener("change", () => {
