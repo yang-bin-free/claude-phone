@@ -2,6 +2,7 @@ package session
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"slices"
 	"strings"
@@ -211,5 +212,29 @@ func TestCodexProcOversizedOutputFinishesTurnWithoutLeakingOrDeadlocking(t *test
 			}
 			_ = proc.Stop()
 		})
+	}
+}
+
+func TestClassifyCodexFailureReturnsActionableAllowlistedMessages(t *testing.T) {
+	tests := []struct {
+		stderr string
+		want   string
+	}{
+		{"Not logged in. Run codex login", "codex login"},
+		{"error: unexpected argument '--private-token' found", "CLI is incompatible"},
+		{"session 019-secret not found", "conversation could not be resumed"},
+		{"request timed out while connecting", "network connection"},
+		{"api_key=top-secret", "exit status 7"},
+	}
+	for _, test := range tests {
+		got := classifyCodexFailure(test.stderr, errors.New("exit status 7"))
+		if !strings.Contains(got, test.want) {
+			t.Errorf("classify %q = %q, want %q", test.stderr, got, test.want)
+		}
+		for _, secret := range []string{"private-token", "019-secret", "top-secret"} {
+			if strings.Contains(got, secret) {
+				t.Errorf("classified message leaked %q: %q", secret, got)
+			}
+		}
 	}
 }

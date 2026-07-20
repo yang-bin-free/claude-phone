@@ -189,7 +189,7 @@ func (p *CodexProc) readTurn(cmd *exec.Cmd, stdout, stderr io.ReadCloser) {
 		_, _ = io.Copy(io.Discard, stdout)
 	}
 	waitErr := cmd.Wait()
-	_ = <-stderrDone
+	stderrText := <-stderrDone
 
 	p.mu.Lock()
 	stopped := p.stopped
@@ -209,10 +209,41 @@ func (p *CodexProc) readTurn(cmd *exec.Cmd, stdout, stderr io.ReadCloser) {
 		return
 	}
 	if waitErr != nil {
-		p.emitFailure("Codex process failed: " + waitErr.Error())
+		p.emitFailure(classifyCodexFailure(stderrText, waitErr))
 		return
 	}
 	p.emitFailure("Codex ended without a terminal event")
+}
+
+func classifyCodexFailure(stderr string, waitErr error) string {
+	message := strings.ToLower(stderr)
+	switch {
+	case strings.Contains(message, "unexpected argument"),
+		strings.Contains(message, "unknown option"),
+		strings.Contains(message, "unrecognized option"),
+		strings.Contains(message, "usage: codex"):
+		return "Installed Codex CLI is incompatible with CodeAfar. Update Codex CLI and try again."
+	case strings.Contains(message, "session") && strings.Contains(message, "not found"),
+		strings.Contains(message, "thread") && strings.Contains(message, "not found"),
+		strings.Contains(message, "no conversation found"),
+		strings.Contains(message, "invalid session"):
+		return "The saved Codex conversation could not be resumed. Create a new CodeAfar session."
+	case strings.Contains(message, "not logged in"),
+		strings.Contains(message, "authentication"),
+		strings.Contains(message, "unauthorized"),
+		strings.Contains(message, "codex login"):
+		return "Codex authentication failed. Run `codex login` in Terminal and try again."
+	case strings.Contains(message, "timed out"),
+		strings.Contains(message, "connection refused"),
+		strings.Contains(message, "network is unreachable"),
+		strings.Contains(message, "could not connect"):
+		return "Codex network connection failed. Check the network and try again."
+	default:
+		if waitErr != nil {
+			return "Codex process failed: " + waitErr.Error()
+		}
+		return "Codex process failed."
+	}
 }
 
 func (p *CodexProc) Stop() error {
