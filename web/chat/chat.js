@@ -113,6 +113,10 @@
     return state.providers.find(item => item.id === id);
   }
 
+  function providerName(id) {
+    return state.providers.find(item => item.id === id)?.name || id || "编码引擎";
+  }
+
   function isDraft() {
     return Boolean(state.draft);
   }
@@ -305,13 +309,24 @@
     });
     if ([...permissionSelect.options].some(option => option.value === selected)) permissionSelect.value = selected;
     else if ([...permissionSelect.options].some(option => option.value === "default")) permissionSelect.value = "default";
+	else if ([...permissionSelect.options].some(option => option.value === "workspaceWrite")) permissionSelect.value = "workspaceWrite";
+	else if (permissionSelect.options.length) permissionSelect.selectedIndex = 0;
+	if (isDraft()) state.draft.permissionMode = permissionSelect.value;
     updateControls();
   }
 
   function renderProviders() {
-    const selected = providerSelect.value || "claude";
+    const selected = state.providers.some(item => item.id === providerSelect.value && item.available)
+	  ? providerSelect.value
+	  : state.providers.find(item => item.available)?.id || "";
     providerSelect.replaceChildren();
-    state.providers.forEach(descriptor => providerSelect.add(new Option(descriptor.name, descriptor.id)));
+    state.providers.forEach(descriptor => {
+	  const label = descriptor.available ? descriptor.name : `${descriptor.name}（不可用）`;
+	  const option = new Option(label, descriptor.id);
+	  option.disabled = !descriptor.available;
+	  option.title = descriptor.unavailableReason || "";
+	  providerSelect.add(option);
+	});
     if ([...providerSelect.options].some(option => option.value === selected)) providerSelect.value = selected;
     const only = state.providers.length === 1 ? state.providers[0] : null;
     providerSelect.hidden = Boolean(only);
@@ -383,7 +398,7 @@
     providerSelect.hidden = true;
     providerLabel.hidden = true;
     sessionContext.hidden = false;
-    sessionContext.textContent = state.selectedSession ? `${state.selectedSession.provider === "claude" ? "Claude Code" : state.selectedSession.provider} · ${state.selectedSession.cwd}` : "";
+    sessionContext.textContent = state.selectedSession ? `${providerName(state.selectedSession.provider)} · ${state.selectedSession.cwd}` : "";
     renderPermissions(state.selectedSession?.permissionMode || "default");
     resetStream();
     showChat();
@@ -539,7 +554,7 @@
         providerSelect.hidden = true;
         providerLabel.hidden = true;
         sessionContext.hidden = false;
-        sessionContext.textContent = `${msg.provider === "claude" ? "Claude Code" : msg.provider} · ${msg.cwd}`;
+        sessionContext.textContent = `${providerName(msg.provider)} · ${msg.cwd}`;
         renderPermissions(msg.permissionMode);
         resetStream();
         showChat();
@@ -743,7 +758,7 @@
     else updateControls();
   });
   providerSelect.addEventListener("change", () => {
-    if (isDraft()) state.draft.permissionMode = "default";
+	if (isDraft()) state.draft.permissionMode = "";
     renderPermissions(isDraft() ? state.draft.permissionMode : "");
   });
   permissionSelect.addEventListener("change", async () => {

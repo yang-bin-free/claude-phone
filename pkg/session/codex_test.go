@@ -38,6 +38,9 @@ func TestCodexProcBuildsNewAndResumeCommands(t *testing.T) {
 	if !containsArgSequence(got, "exec", "resume") || !slices.Contains(got, "thread-1") || !slices.Contains(got, "read-only") {
 		t.Fatalf("resume args = %v", got)
 	}
+	if slices.Contains(got, "--color") {
+		t.Fatalf("resume args include unsupported --color flag: %v", got)
+	}
 }
 
 func TestCodexProcMapsFullAccessAndRejectsUnknownPermission(t *testing.T) {
@@ -137,11 +140,9 @@ func TestCodexProcReportsBoundedProcessFailure(t *testing.T) {
 	proc := NewCodexProc(CodexConfig{
 		Bin: "../../testdata/fake-codex.sh", Cwd: ".", Permission: "readOnly",
 	})
-	result := make(chan string, 1)
+	result := make(chan string, 2)
 	proc.OnOutput(func(payload []byte) {
-		if strings.Contains(string(payload), "CODEX_ERROR") {
-			result <- string(payload)
-		}
+		result <- string(payload)
 	})
 	if err := proc.Start(); err != nil {
 		t.Fatal(err)
@@ -156,6 +157,14 @@ func TestCodexProcReportsBoundedProcessFailure(t *testing.T) {
 		}
 	case <-time.After(3 * time.Second):
 		t.Fatal("timed out waiting for Codex process error")
+	}
+	select {
+	case got := <-result:
+		if !strings.Contains(got, `"type":"done"`) {
+			t.Fatalf("process failure did not finish turn: %q", got)
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("timed out waiting for Codex failure completion")
 	}
 	_ = proc.Stop()
 }

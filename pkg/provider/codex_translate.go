@@ -93,7 +93,8 @@ func (a *CodexAdapter) TranslateOutput(payload []byte) [][]byte {
 		if message == "" {
 			message = event.Message
 		}
-		return marshalCodex(protocol.NewError("CODEX_ERROR", nonEmptyCodexError(message)))
+		messages := marshalCodex(protocol.NewError("CODEX_ERROR", nonEmptyCodexError(message)))
+		return append(messages, marshalCodex(protocol.DoneMsg{Type: protocol.TypeDone})...)
 	}
 	return nil
 }

@@ -69,6 +69,25 @@ func TestDesktopShellHasStableStateAndNavigationHooks(t *testing.T) {
 	}
 }
 
+func TestProviderPickerDisablesUnavailableEnginesAndSynchronizesPermissions(t *testing.T) {
+	jsBytes, err := fs.ReadFile(Assets, "chat/chat.js")
+	if err != nil {
+		t.Fatal(err)
+	}
+	js := string(jsBytes)
+	for _, marker := range []string{
+		`option.disabled = !descriptor.available`,
+		`state.providers.find(item => item.available)?.id`,
+		`state.draft.permissionMode = permissionSelect.value`,
+		`function providerName(id)`,
+		`providerName(state.selectedSession.provider)`,
+	} {
+		if !strings.Contains(js, marker) {
+			t.Errorf("provider picker behavior missing %q", marker)
+		}
+	}
+}
+
 func TestAuthorizationFailuresUseSingletonBannerInsteadOfChatHistory(t *testing.T) {
 	jsBytes, err := fs.ReadFile(Assets, "chat/chat.js")
 	if err != nil {

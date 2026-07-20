@@ -58,7 +58,12 @@ func TestCodexTranslatorMapsFileChangesAndToolCalls(t *testing.T) {
 
 func TestCodexTranslatorMapsFailuresAndIgnoresInternalItems(t *testing.T) {
 	translator := NewCodexAdapter("codex", true, "")
-	assertCodexMessage(t, translator.TranslateOutput([]byte(`{"type":"turn.failed","error":{"message":"request failed"}}`)), protocol.TypeError, "request failed", "", "")
+	failure := translator.TranslateOutput([]byte(`{"type":"turn.failed","error":{"message":"request failed"}}`))
+	if len(failure) != 2 {
+		t.Fatalf("turn failure messages=%q", failure)
+	}
+	assertCodexMessage(t, failure[:1], protocol.TypeError, "request failed", "", "")
+	assertCodexMessage(t, failure[1:], protocol.TypeDone, "", "", "")
 	assertCodexMessage(t, translator.TranslateOutput([]byte(`{"type":"error","message":"reconnecting"}`)), protocol.TypeError, "reconnecting", "", "")
 	for _, input := range []string{
 		`{"type":"thread.started","thread_id":"thread"}`,

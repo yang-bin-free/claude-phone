@@ -210,6 +210,44 @@ func TestWebSocket_ListProvidersReturnsDescriptor(t *testing.T) {
 	}
 }
 
+func TestCodexProviderIdentityPersistsAndIsUsedWhenSessionResumes(t *testing.T) {
+	dataDir := t.TempDir()
+	cwd := t.TempDir()
+	e := New(Config{DataDir: dataDir, DefaultWorkingDir: cwd, DeviceTokens: map[string]string{"device": "Mac"}})
+	adapter := &recordingAdapter{id: provider.CodexID, permissions: []string{"workspaceWrite"}}
+	e.SetProviderRegistry(provider.NewRegistry(adapter))
+	server, conn := openAuthenticatedEngine(t, e, "device")
+
+	writeJSON(t, conn, protocol.ControlMsg{
+		Type: protocol.TypeControl, Action: protocol.ActionCreateSession,
+		WorkingDir: cwd, Provider: provider.CodexID, PermissionMode: "workspaceWrite",
+	})
+	created := readSessionCreated(t, conn)
+	process := adapter.processes[0]
+	process.providerSessionID = "thread-codex-1"
+	process.onOutput([]byte(`{"type":"thread.started","thread_id":"thread-codex-1"}`))
+	conn.Close()
+	server.Close()
+	if err := e.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	restarted := New(Config{DataDir: dataDir, DeviceTokens: map[string]string{"device": "Mac"}})
+	defer restarted.Close()
+	resumeAdapter := &recordingAdapter{id: provider.CodexID, permissions: []string{"workspaceWrite"}}
+	restarted.SetProviderRegistry(provider.NewRegistry(resumeAdapter))
+	restored, ok := restarted.manager.Get(created.SessionID)
+	if !ok {
+		t.Fatal("Codex session was not restored")
+	}
+	if err := restarted.resumeSession(restored); err != nil {
+		t.Fatal(err)
+	}
+	if len(resumeAdapter.configs) != 1 || resumeAdapter.configs[0].ProviderSessionID != "thread-codex-1" {
+		t.Fatalf("resume config=%+v", resumeAdapter.configs)
+	}
+}
+
 func TestWebSocket_PermissionChangeRestartsIdleSessionAndPersists(t *testing.T) {
 	dataDir := t.TempDir()
 	e := New(Config{DataDir: dataDir, DefaultWorkingDir: ".", DeviceTokens: map[string]string{"device": "Mac"}})
@@ -660,17 +698,18 @@ func (a *recordingAdapter) NewProcess(config provider.SessionConfig) provider.Pr
 	if index := len(a.processes); index < len(a.startHooks) {
 		startHook = a.startHooks[index]
 	}
-	process := &recordingProcess{startErr: startErr, startHook: startHook}
+	process := &recordingProcess{startErr: startErr, startHook: startHook, providerSessionID: config.ProviderSessionID}
 	a.processes = append(a.processes, process)
 	return process
 }
 
 type recordingProcess struct {
-	onOutput  session.OutputFunc
-	stopCalls int
-	sent      []string
-	startErr  error
-	startHook func() error
+	onOutput          session.OutputFunc
+	stopCalls         int
+	sent              []string
+	startErr          error
+	startHook         func() error
+	providerSessionID string
 }
 
 func (p *recordingProcess) OnOutput(fn session.OutputFunc) { p.onOutput = fn }
@@ -680,8 +719,9 @@ func (p *recordingProcess) Start() error {
 	}
 	return p.startErr
 }
-func (p *recordingProcess) Send(text string) error { p.sent = append(p.sent, text); return nil }
-func (p *recordingProcess) Stop() error            { p.stopCalls++; return nil }
+func (p *recordingProcess) Send(text string) error    { p.sent = append(p.sent, text); return nil }
+func (p *recordingProcess) Stop() error               { p.stopCalls++; return nil }
+func (p *recordingProcess) ProviderSessionID() string { return p.providerSessionID }
 
 func TestHandleControl_LeaveSession(t *testing.T) {
 	e := New(Config{})

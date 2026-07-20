@@ -78,7 +78,11 @@ func (p *CodexProc) buildArgsFor(prompt, providerSessionID string) ([]string, er
 	if providerSessionID != "" {
 		args = append(args, "resume")
 	}
-	args = append(args, "--json", "--color", "never", "--skip-git-repo-check")
+	args = append(args, "--json")
+	if providerSessionID == "" {
+		args = append(args, "--color", "never")
+	}
+	args = append(args, "--skip-git-repo-check")
 	if providerSessionID != "" {
 		args = append(args, providerSessionID)
 	}
@@ -198,7 +202,7 @@ func (p *CodexProc) readTurn(cmd *exec.Cmd, stdout, stderr io.ReadCloser) {
 		return
 	}
 	if scanErr != nil {
-		p.emitError("无法读取 Codex 输出: " + scanErr.Error())
+		p.emitFailure("无法读取 Codex 输出: " + scanErr.Error())
 		return
 	}
 	if waitErr != nil {
@@ -206,8 +210,10 @@ func (p *CodexProc) readTurn(cmd *exec.Cmd, stdout, stderr io.ReadCloser) {
 		if message == "" {
 			message = waitErr.Error()
 		}
-		p.emitError(message)
+		p.emitFailure(message)
+		return
 	}
+	p.emitFailure("Codex ended without a terminal event")
 }
 
 func (p *CodexProc) Stop() error {
@@ -232,7 +238,7 @@ func (p *CodexProc) emit(payload []byte) {
 	}
 }
 
-func (p *CodexProc) emitError(message string) {
+func (p *CodexProc) emitFailure(message string) {
 	message = strings.TrimSpace(message)
 	if len(message) > codexMaxErrorBytes {
 		message = message[:codexMaxErrorBytes]
@@ -242,6 +248,8 @@ func (p *CodexProc) emitError(message string) {
 	}
 	payload, _ := json.Marshal(protocol.NewError("CODEX_ERROR", message))
 	p.emit(payload)
+	done, _ := json.Marshal(protocol.DoneMsg{Type: protocol.TypeDone})
+	p.emit(done)
 }
 
 func readBoundedStderr(reader io.Reader) string {
