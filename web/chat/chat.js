@@ -2,7 +2,9 @@
   const state = {
     ws: null, sessionId: "", retry: 0, retryTimer: 0, statusTimer: 0, generation: 0,
     assistantChunk: null, pendingTokens: "", tokenFrame: 0,
-    sessions: [], projects: [], templates: [], engineReady: false, connected: false, sessionReady: false
+    sessions: [], projects: [], providers: [], templates: [],
+    engineReady: false, connected: false, sessionReady: false,
+    draft: null, selectedSession: null
   };
   const messages = document.querySelector("#messages");
   const connection = document.querySelector("#connection-state");
@@ -11,6 +13,13 @@
   const admin = document.querySelector("#admin-view");
   const composer = document.querySelector("#composer");
   const prompt = document.querySelector("#prompt");
+  const projectSelect = document.querySelector("#draft-project");
+  const providerSelect = document.querySelector("#draft-provider");
+  const providerLabel = document.querySelector("#provider-label");
+  const permissionSelect = document.querySelector("#draft-permission");
+  const sessionContext = document.querySelector("#session-context");
+  const draftStatus = document.querySelector("#draft-status");
+  const sendButton = composer.querySelector("button.primary");
   const params = new URLSearchParams(location.search);
   const token = new URLSearchParams(location.hash.slice(1)).get("token") || "";
   const platform = params.get("platform") || "desktop";
@@ -19,18 +28,51 @@
   const deviceName = params.get("deviceName") || (platform === "mobile" ? "Android" : "Mac");
   document.body.classList.add(platform);
 
+  function newRequestID() {
+    if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID();
+    return `req-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  }
+
+  function basename(path) {
+    const parts = String(path || "").replace(/\/+$/, "").split("/");
+    return parts[parts.length - 1] || "项目";
+  }
+
+  function sessionNameFor(value, cwd) {
+    const normalized = String(value || "").trim().replace(/\s+/g, " ");
+    const title = Array.from(normalized).slice(0, 32).join("");
+    if (title) return title;
+    const time = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    return `${basename(cwd)} · ${time}`;
+  }
+
   function showBanner(message) {
     banner.textContent = message || "";
     banner.hidden = !message;
   }
 
+  function currentProvider() {
+    const id = providerSelect.value || state.providers.find(item => item.available)?.id || "claude";
+    return state.providers.find(item => item.id === id);
+  }
+
+  function isDraft() {
+    return Boolean(state.draft);
+  }
+
   function updateControls() {
-    const canCreate = state.engineReady && state.connected;
-    const canSend = canCreate && state.sessionReady;
-    prompt.disabled = !canSend;
-    composer.querySelector("button.primary").disabled = !canSend;
-    document.querySelector("#new-session").disabled = !canCreate;
-    document.querySelector("#new-session-mobile").disabled = !canCreate;
+    const engineAvailable = state.engineReady && state.connected;
+    const draftReady = isDraft() && state.draft.status !== "creating" && Boolean(
+      projectSelect.value && currentProvider()?.available && permissionSelect.value && prompt.value.trim()
+    );
+    const sessionReady = !isDraft() && state.sessionReady && Boolean(prompt.value.trim());
+    prompt.disabled = !engineAvailable || (isDraft() && state.draft.status === "creating");
+    sendButton.disabled = !engineAvailable || !(draftReady || sessionReady);
+    document.querySelector("#new-session").disabled = !engineAvailable;
+    document.querySelector("#new-session-mobile").disabled = !engineAvailable;
+    projectSelect.disabled = !isDraft() || state.draft?.status === "creating";
+    providerSelect.disabled = !isDraft() || state.draft?.status === "creating";
+    permissionSelect.disabled = !engineAvailable || state.draft?.status === "creating";
   }
 
   function setComposerEnabled(enabled) {
@@ -48,24 +90,34 @@
 
   async function showAdmin() {
     if (platform === "mobile") return;
+    if (isDraft() && prompt.value.trim() && !window.confirm("当前新会话草稿尚未发送，确认离开？")) return;
     chat.hidden = true;
     admin.hidden = false;
     document.body.classList.toggle("admin-mode", true);
     document.querySelector("#show-admin").classList.add("active");
     document.querySelector("#view-title").textContent = "管理与诊断";
-    if (window.claudePhone.refreshAdmin) {
-      try { await window.claudePhone.refreshAdmin(); }
+    if (window.codeAfar.refreshAdmin) {
+      try { await window.codeAfar.refreshAdmin(); }
       catch (error) { showBanner(`管理数据加载失败：${error.message}`); }
     }
   }
 
-  window.claudePhone = {
+  const bridge = {
     adminToken: token,
     state,
     showChat,
     showAdmin,
-    setPrompt(value) { prompt.value = value || ""; prompt.focus(); }
+    setPrompt(value) { prompt.value = value || ""; prompt.dispatchEvent(new Event("input")); prompt.focus(); },
+    setVoiceText(value) { prompt.value = value || ""; prompt.dispatchEvent(new Event("input")); prompt.focus(); },
+    setVoiceState(next, message) {
+      const button = document.querySelector("#voice-mobile");
+      button.dataset.state = next || "idle";
+      button.setAttribute("aria-label", message || (next === "listening" ? "停止语音输入" : "开始语音输入"));
+      if (message) draftStatus.textContent = message;
+    }
   };
+  window.codeAfar = bridge;
+  window.claudePhone = window.codeAfar;
 
   function legacyCopy(text) {
     const area = document.createElement("textarea");
@@ -126,6 +178,14 @@
     return content;
   }
 
+  function renderDraftEmpty() {
+    messages.replaceChildren();
+    const empty = document.createElement("div");
+    empty.className = "empty";
+    empty.innerHTML = "<strong class=\"empty-title\">开始新的开发任务</strong><p>选择工作目录，然后告诉 CodeAfar 要做什么。</p><span>Return 发送 · Shift-Return 换行</span>";
+    messages.append(empty);
+  }
+
   function flushTokens() {
     state.tokenFrame = 0;
     if (!state.pendingTokens) return;
@@ -153,10 +213,102 @@
     return true;
   }
 
-  function selectSession(sessionId, name) {
-    state.sessionId = sessionId;
-    state.sessionReady = false;
+  function renderProjectOptions(preferred = "") {
+    const selected = preferred || projectSelect.value;
+    projectSelect.replaceChildren(new Option(state.projects.length ? "选择项目" : "选择项目", ""));
+    state.projects.forEach(project => {
+      projectSelect.add(new Option(`${project.name} · ${project.path}`, project.path));
+    });
+    if (platform === "desktop") projectSelect.add(new Option("选择文件夹…", "__choose__"));
+    if (state.projects.some(project => project.path === selected)) projectSelect.value = selected;
+    else if (state.projects.length === 1) projectSelect.value = state.projects[0].path;
     updateControls();
+  }
+
+  function renderPermissions(preferred = "") {
+    const descriptor = currentProvider();
+    const selected = preferred || permissionSelect.value;
+    permissionSelect.replaceChildren();
+    (descriptor?.permissions || []).forEach(option => {
+      const label = option.dangerous ? `${option.label} ⚠` : option.label;
+      permissionSelect.add(new Option(label, option.id));
+    });
+    if ([...permissionSelect.options].some(option => option.value === selected)) permissionSelect.value = selected;
+    else if ([...permissionSelect.options].some(option => option.value === "default")) permissionSelect.value = "default";
+    updateControls();
+  }
+
+  function renderProviders() {
+    const selected = providerSelect.value || "claude";
+    providerSelect.replaceChildren();
+    state.providers.forEach(descriptor => providerSelect.add(new Option(descriptor.name, descriptor.id)));
+    if ([...providerSelect.options].some(option => option.value === selected)) providerSelect.value = selected;
+    const only = state.providers.length === 1 ? state.providers[0] : null;
+    providerSelect.hidden = Boolean(only);
+    providerLabel.hidden = !only;
+    providerLabel.textContent = only?.name || "";
+    renderPermissions();
+  }
+
+  async function chooseProjectDirectory() {
+    if (platform !== "desktop" || !window.codeAfarNative?.chooseDirectory) {
+      showBanner("请先在 Mac 上添加工作目录。");
+      return;
+    }
+    try {
+      const path = await window.codeAfarNative.chooseDirectory();
+      if (!path) return;
+      const response = await fetch("/desktop/projects", {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ path })
+      });
+      if (!response.ok) throw new Error((await response.text()).trim() || `状态 ${response.status}`);
+      const project = await response.json();
+      state.projects = state.projects.filter(item => item.path !== project.path).concat(project);
+      renderProjectOptions(project.path);
+      showBanner("");
+    } catch (error) {
+      showBanner(`无法添加工作目录：${error.message}`);
+      renderProjectOptions();
+    }
+  }
+
+  function beginDraft() {
+    if (isDraft() && prompt.value.trim() && !window.confirm("当前新会话草稿尚未发送，确认丢弃？")) return;
+    state.sessionId = "";
+    state.sessionReady = false;
+    state.selectedSession = null;
+    state.draft = { status: "draft", requestId: newRequestID(), firstPrompt: "" };
+    prompt.value = "";
+    prompt.placeholder = "告诉 CodeAfar 要做什么…";
+    projectSelect.hidden = false;
+    providerLabel.hidden = state.providers.length !== 1;
+    providerSelect.hidden = state.providers.length === 1;
+    sessionContext.hidden = true;
+    permissionSelect.disabled = false;
+    draftStatus.textContent = "";
+    document.querySelector("#view-title").textContent = "新会话";
+    document.querySelector("#stop-session").disabled = true;
+    resetStream();
+    renderDraftEmpty();
+    renderSessions();
+    showChat();
+    updateControls();
+  }
+
+  function selectSession(sessionId, name) {
+    if (isDraft() && prompt.value.trim() && !window.confirm("当前新会话草稿尚未发送，确认离开？")) return;
+    state.draft = null;
+    state.sessionId = sessionId;
+    state.selectedSession = state.sessions.find(item => item.sessionId === sessionId) || null;
+    state.sessionReady = false;
+    prompt.value = "";
+    prompt.placeholder = "输入消息…";
+    projectSelect.hidden = true;
+    providerSelect.hidden = true;
+    providerLabel.hidden = true;
+    sessionContext.hidden = false;
+    sessionContext.textContent = state.selectedSession ? `${state.selectedSession.provider === "claude" ? "Claude Code" : state.selectedSession.provider} · ${state.selectedSession.cwd}` : "";
+    renderPermissions(state.selectedSession?.permissionMode || "default");
     resetStream();
     showChat();
     document.querySelector("#view-title").textContent = name || "会话";
@@ -165,6 +317,7 @@
     send({ type: "control", action: "select_session", sessionId });
     send({ type: "control", action: "load_history", sessionId, limit: 500 });
     renderSessions();
+    updateControls();
   }
 
   function renderHistory(items) {
@@ -202,12 +355,28 @@
     });
   }
 
+  function sendCreateRequest() {
+    if (!state.draft?.firstPrompt) return false;
+    return send({
+      type: "control", action: "create_session", name: sessionNameFor(state.draft.firstPrompt, projectSelect.value),
+      workingDir: projectSelect.value, provider: providerSelect.value || "claude",
+      permissionMode: permissionSelect.value, requestId: state.draft.requestId
+    });
+  }
+
   function showProtocolError(msg) {
     if (msg.code === "DEVICE_NOT_AUTHORIZED") {
       showBanner(`${msg.code}: ${msg.message}`);
       connection.textContent = "设备未授权";
       state.connected = false;
       setComposerEnabled(false);
+      return;
+    }
+    if (state.draft?.status === "creating") {
+      state.draft.status = "failed";
+      draftStatus.textContent = "创建失败，可再次发送重试";
+      showBanner(msg.message || "会话创建失败");
+      updateControls();
       return;
     }
     append("error", `${msg.code}: ${msg.message}`);
@@ -224,34 +393,61 @@
       case "hello":
         send({ type: "control", action: "list_sessions", limit: 100 });
         send({ type: "control", action: "list_projects" });
+        send({ type: "control", action: "list_providers" });
         send({ type: "control", action: "list_templates" });
         if (state.sessionId) {
           send({ type: "control", action: "select_session", sessionId: state.sessionId });
           send({ type: "control", action: "load_history", sessionId: state.sessionId, limit: 500 });
+        } else if (state.draft?.status === "creating") {
+          sendCreateRequest();
         }
         break;
       case "session_list":
         state.sessions = msg.sessions || [];
         renderSessions();
         break;
-      case "session_created":
+      case "session_created": {
+        if (state.draft && msg.requestId && msg.requestId !== state.draft.requestId) break;
+        const firstPrompt = state.draft?.firstPrompt || "";
+        state.draft = null;
         state.sessionId = msg.sessionId;
         state.sessionReady = true;
-        updateControls();
+        state.selectedSession = {
+          sessionId: msg.sessionId, name: msg.name, cwd: msg.cwd, provider: msg.provider,
+          permissionMode: msg.permissionMode, model: msg.model
+        };
+        prompt.disabled = false;
+        prompt.value = "";
+        prompt.placeholder = "输入消息…";
+        projectSelect.hidden = true;
+        providerSelect.hidden = true;
+        providerLabel.hidden = true;
+        sessionContext.hidden = false;
+        sessionContext.textContent = `${msg.provider === "claude" ? "Claude Code" : msg.provider} · ${msg.cwd}`;
+        renderPermissions(msg.permissionMode);
         resetStream();
         showChat();
         messages.replaceChildren();
         document.querySelector("#view-title").textContent = msg.name || "新会话";
         document.querySelector("#stop-session").disabled = false;
+        draftStatus.textContent = "";
+        showBanner("");
+        if (firstPrompt) {
+          append("user", firstPrompt);
+          send({ type: "text", content: firstPrompt });
+        }
         send({ type: "control", action: "list_sessions", limit: 100 });
-        break;
-      case "project_list": {
-        state.projects = msg.projects || [];
-        const select = document.querySelector("#create-project");
-        select.replaceChildren(new Option("默认目录", ""));
-        state.projects.forEach(project => select.add(new Option(project.name, project.path)));
+        updateControls();
         break;
       }
+      case "project_list":
+        state.projects = msg.projects || [];
+        renderProjectOptions();
+        break;
+      case "provider_list":
+        state.providers = msg.providers || [];
+        renderProviders();
+        break;
       case "template_list": {
         state.templates = msg.templates || [];
         const container = document.querySelector("#prompt-templates");
@@ -261,7 +457,7 @@
           button.type = "button";
           button.className = "quiet";
           button.textContent = template.label;
-          button.addEventListener("click", () => window.claudePhone.setPrompt(template.prompt));
+          button.addEventListener("click", () => window.codeAfar.setPrompt(template.prompt));
           container.append(button);
         });
         break;
@@ -298,15 +494,21 @@
         flushTokens();
         state.assistantChunk = null;
         break;
+      case "permission_changed":
+        if (msg.sessionId === state.sessionId) {
+          if (!msg.pending) {
+            permissionSelect.value = msg.permissionMode;
+            if (state.selectedSession) state.selectedSession.permissionMode = msg.permissionMode;
+          }
+          draftStatus.textContent = msg.pending ? "将在本轮结束后应用" : "权限已更新";
+        }
+        break;
       case "session_stopped":
         if (state.sessionId === msg.sessionId) {
           state.sessionId = "";
           state.sessionReady = false;
-          updateControls();
           connection.textContent = state.connected ? "已连接" : "重新连接中";
-          document.querySelector("#view-title").textContent = "新会话";
-          document.querySelector("#stop-session").disabled = true;
-          messages.replaceChildren(Object.assign(document.createElement("p"), { className: "empty", textContent: "会话已停止。" }));
+          beginDraft();
         }
         send({ type: "control", action: "list_sessions", limit: 100 });
         break;
@@ -386,12 +588,8 @@
     }
   }
 
-  const createSession = () => {
-    showChat();
-    send({ type: "control", action: "create_session", name: platform === "mobile" ? "Android 会话" : "Mac 会话", workingDir: document.querySelector("#create-project").value, permissionMode: document.querySelector("#create-permission").value });
-  };
-  document.querySelector("#new-session").addEventListener("click", createSession);
-  document.querySelector("#new-session-mobile").addEventListener("click", createSession);
+  document.querySelector("#new-session").addEventListener("click", beginDraft);
+  document.querySelector("#new-session-mobile").addEventListener("click", beginDraft);
   document.querySelector("#show-admin").addEventListener("click", showAdmin);
   document.querySelector("#mobile-session-select").addEventListener("change", event => {
     const session = state.sessions.find(item => item.sessionId === event.target.value);
@@ -408,14 +606,46 @@
   document.querySelector("#voice-mobile").addEventListener("click", () => {
     if (window.AndroidBridge?.startVoice) AndroidBridge.startVoice();
   });
+  projectSelect.addEventListener("change", () => {
+    if (projectSelect.value === "__choose__") chooseProjectDirectory();
+    else updateControls();
+  });
+  providerSelect.addEventListener("change", () => renderPermissions());
+  permissionSelect.addEventListener("change", () => {
+    const option = currentProvider()?.permissions?.find(item => item.id === permissionSelect.value);
+    if (option?.dangerous && !window.confirm("完全访问会跳过常规权限限制。只应在隔离环境或完全信任的目录中使用，确认继续？")) {
+      permissionSelect.value = state.selectedSession?.permissionMode || "default";
+      return;
+    }
+    if (!isDraft() && state.sessionId) {
+      send({ type: "control", action: "set_permission_mode", sessionId: state.sessionId, permissionMode: permissionSelect.value });
+    }
+    updateControls();
+  });
+  prompt.addEventListener("input", updateControls);
   composer.addEventListener("submit", event => {
     event.preventDefault();
     const content = prompt.value.trim();
-    if (!content || !state.engineReady || !state.connected || !state.sessionReady) return;
+    if (!content || !state.engineReady || !state.connected) return;
+    if (isDraft()) {
+      if (!projectSelect.value || !currentProvider()?.available || !permissionSelect.value || state.draft.status === "creating") return;
+      state.draft = { ...state.draft, status: "creating", firstPrompt: content };
+      draftStatus.textContent = "正在创建会话…";
+      showBanner("");
+      updateControls();
+      if (!sendCreateRequest()) {
+        state.draft.status = "failed";
+        draftStatus.textContent = "连接中断，可再次发送重试";
+        updateControls();
+      }
+      return;
+    }
+    if (!state.sessionReady) return;
     append("user", content);
     state.assistantChunk = null;
     send({ type: "text", content });
     prompt.value = "";
+    updateControls();
   });
   prompt.addEventListener("keydown", event => {
     if (event.isComposing || event.keyCode === 229) return;
@@ -426,11 +656,11 @@
   });
   document.addEventListener("keydown", event => {
     if (!event.metaKey) return;
-    if (event.key.toLowerCase() === "n") { event.preventDefault(); createSession(); }
+    if (event.key.toLowerCase() === "n") { event.preventDefault(); beginDraft(); }
     if (event.key === ",") { event.preventDefault(); showAdmin(); }
   });
 
+  beginDraft();
   setComposerEnabled(false);
-  showChat();
   bootstrapDesktop();
 })();

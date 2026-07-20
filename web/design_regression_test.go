@@ -165,3 +165,63 @@ func TestDesktopReturnSendsWithoutBreakingIME(t *testing.T) {
 		t.Fatal("composition-safe Return-to-send handler missing")
 	}
 }
+
+func TestNewSessionUsesComposerContextBar(t *testing.T) {
+	htmlBytes, err := fs.ReadFile(Assets, "chat/index.html")
+	if err != nil {
+		t.Fatal(err)
+	}
+	html := string(htmlBytes)
+	headerEnd := strings.Index(html, "</header>")
+	if headerEnd < 0 {
+		t.Fatal("desktop header is missing")
+	}
+	header := html[:headerEnd]
+	for _, removed := range []string{`id="create-project"`, `id="create-permission"`, "默认目录", ">严格<"} {
+		if strings.Contains(header, removed) {
+			t.Errorf("legacy header control remains: %q", removed)
+		}
+	}
+	for _, marker := range []string{
+		`id="draft-project"`, `id="draft-provider"`, `id="draft-permission"`,
+		`id="provider-label"`, `class="composer-context"`, "告诉 CodeAfar 要做什么",
+	} {
+		if !strings.Contains(html, marker) {
+			t.Errorf("draft composer missing %q", marker)
+		}
+	}
+}
+
+func TestChatScriptCreatesThenSendsPendingFirstPrompt(t *testing.T) {
+	jsBytes, err := fs.ReadFile(Assets, "chat/chat.js")
+	if err != nil {
+		t.Fatal(err)
+	}
+	js := string(jsBytes)
+	for _, marker := range []string{
+		`function beginDraft()`, `status: "draft"`, `requestId: newRequestID()`,
+		`firstPrompt: content`, `action: "create_session"`, `requestId: state.draft.requestId`,
+		`case "session_created":`, `send({ type: "text", content: firstPrompt })`,
+	} {
+		if !strings.Contains(js, marker) {
+			t.Errorf("draft state machine missing %q", marker)
+		}
+	}
+}
+
+func TestChatScriptExposesCodeAfarBridgeWithLegacyAlias(t *testing.T) {
+	jsBytes, err := fs.ReadFile(Assets, "chat/chat.js")
+	if err != nil {
+		t.Fatal(err)
+	}
+	js := string(jsBytes)
+	for _, marker := range []string{
+		`window.codeAfar = bridge`, `window.claudePhone = window.codeAfar`,
+		`async function chooseProjectDirectory()`, `window.codeAfarNative?.chooseDirectory`,
+		`fetch("/desktop/projects"`,
+	} {
+		if !strings.Contains(js, marker) {
+			t.Errorf("CodeAfar bridge/folder picker missing %q", marker)
+		}
+	}
+}

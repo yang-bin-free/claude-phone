@@ -8,7 +8,6 @@
 header { border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; padding: 0 22px; }
 .header-actions { display: flex; gap: 6px; }
 .admin-mode .header-actions { visibility: hidden; pointer-events: none; }
-.header-actions select { min-height: 36px; max-width: 150px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface-raised); color: inherit; padding: 7px; }
 #open-settings { display: none; }
 #stop-session:disabled { opacity: .4; cursor: default; }
 #new-session-mobile { display: none; }
@@ -31,14 +30,22 @@ header { border-bottom: 1px solid var(--border); display: flex; align-items: cen
 .empty-title { display: block; color: var(--text); font-size: 17px; margin-bottom: 8px; }
 .empty p { margin: 0 0 10px; }
 .empty span { font-size: 12px; }
-#composer { border-top: 1px solid var(--border); padding: 16px 22px; display: flex; gap: 12px; }
-#prompt { resize: none; flex: 1; border: 1px solid var(--border); border-radius: 12px; background: var(--surface-raised); color: inherit; padding: 12px; }
+#composer { padding: 12px max(22px, calc((100% - 860px) / 2)) 18px; }
+.composer-box { border: 1px solid var(--border); border-radius: 16px; background: var(--surface-raised); box-shadow: 0 12px 34px #0003; overflow: hidden; }
+#prompt { display: block; width: 100%; resize: none; border: 0; background: transparent; color: inherit; padding: 16px 18px 10px; min-height: 88px; outline: 0; }
+.composer-context { display: flex; align-items: center; gap: 8px; min-height: 50px; padding: 6px 8px 8px 12px; }
+.composer-context select { min-height: 34px; max-width: 220px; border: 0; border-radius: 8px; background: #2a2c28; color: var(--text); padding: 6px 9px; }
+.context-label, .session-context { color: var(--muted); font-size: 13px; padding: 0 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.session-context { max-width: 45%; }
+.draft-status { color: var(--muted); font-size: 12px; margin-left: auto; }
+.composer-context .primary { margin-left: auto; min-width: 64px; }
+.draft-status:not(:empty) + #voice-mobile + .primary { margin-left: 0; }
 #voice-mobile { display: none; }
 #prompt-templates { display: flex; gap: 6px; padding: 0 22px; overflow-x: auto; }
 .startup-banner { position: absolute; z-index: 10; top: 68px; left: 24px; right: 24px; border: 1px solid #684047; border-radius: 12px; background: #3d252a; color: #ffd4d9; padding: 12px 16px; box-shadow: 0 10px 30px #0006; white-space: pre-wrap; }
 
 @media (max-width: 900px) {
   .desktop .app-shell { grid-template-columns: 210px minmax(0, 1fr); }
-  .desktop .header-actions select { max-width: 110px; }
   .desktop .messages { padding-left: 24px; padding-right: 24px; }
+  .desktop #composer { padding-left: 24px; padding-right: 24px; }
 }
