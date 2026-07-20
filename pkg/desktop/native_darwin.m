@@ -52,15 +52,40 @@ void cpHideWindow(void *windowPtr) {
     [window orderOut:nil];
 }
 
-char *caChooseDirectory(void) {
+static char *cpChooseDirectoryOnMainThread(void) {
+    NSWindow *previousWindow = NSApp.keyWindow ?: NSApp.mainWindow;
+    [NSApp unhide:nil];
+    [NSApp activateIgnoringOtherApps:YES];
+    if (previousWindow != nil) {
+        [previousWindow makeKeyAndOrderFront:nil];
+    }
+
     NSOpenPanel *panel = [NSOpenPanel openPanel];
     panel.canChooseDirectories = YES;
     panel.canChooseFiles = NO;
     panel.allowsMultipleSelection = NO;
     panel.canCreateDirectories = NO;
     panel.prompt = @"选择";
-    if ([panel runModal] != NSModalResponseOK || panel.URL == nil) {
+    NSModalResponse response = [panel runModal];
+
+    [NSApp unhide:nil];
+    [NSApp activateIgnoringOtherApps:YES];
+    if (previousWindow != nil) {
+        [previousWindow makeKeyAndOrderFront:nil];
+    }
+    if (response != NSModalResponseOK || panel.URL == nil) {
         return strdup("");
     }
     return strdup(panel.URL.path.UTF8String);
+}
+
+char *caChooseDirectory(void) {
+    if ([NSThread isMainThread]) {
+        return cpChooseDirectoryOnMainThread();
+    }
+    __block char *result = NULL;
+    dispatch_sync(dispatch_get_main_queue(), ^{
+        result = cpChooseDirectoryOnMainThread();
+    });
+    return result;
 }

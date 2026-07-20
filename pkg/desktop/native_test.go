@@ -2,6 +2,7 @@ package desktop
 
 import (
 	"net/url"
+	"os"
 	"strings"
 	"testing"
 )
@@ -26,6 +27,24 @@ func TestDirectoryPickerBootstrapExposesNarrowBridge(t *testing.T) {
 	}
 	if strings.Contains(directoryPickerBootstrap, "fetch") {
 		t.Fatalf("native bridge should only expose directory selection: %q", directoryPickerBootstrap)
+	}
+}
+
+func TestDirectoryPickerRunsOnMainThreadAndRestoresAccessoryApp(t *testing.T) {
+	source, err := os.ReadFile("native_darwin.m")
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(source)
+	for _, marker := range []string{
+		"[NSThread isMainThread]",
+		"dispatch_sync(dispatch_get_main_queue()",
+		"[NSApp unhide:nil]",
+		"[previousWindow makeKeyAndOrderFront:nil]",
+	} {
+		if !strings.Contains(text, marker) {
+			t.Errorf("native directory picker missing %q", marker)
+		}
 	}
 }
 

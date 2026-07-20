@@ -54,6 +54,9 @@ func TestMacInstallerVerifiesAndLaunchesInstalledBundle(t *testing.T) {
 		"/Applications/CodeAfar.app",
 		"open \"${destination}\"",
 		"restore_previous",
+		"pkill -x claude-phone",
+		"installed_pid",
+		"-iTCP:9877 -sTCP:LISTEN",
 	} {
 		if !strings.Contains(text, marker) {
 			t.Errorf("Mac installer missing %q", marker)

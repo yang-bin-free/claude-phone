@@ -274,6 +274,9 @@
     } catch (error) {
       showBanner(`无法添加工作目录：${error.message}`);
       renderProjectOptions();
+    } finally {
+      if (projectSelect.value === "__choose__") projectSelect.value = "";
+      updateControls();
     }
   }
 

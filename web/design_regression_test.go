@@ -250,3 +250,19 @@ func TestVoiceDraftAppendsWithoutSubmitting(t *testing.T) {
 		t.Fatal("voice transcript must not submit itself")
 	}
 }
+
+func TestDirectoryPickerCanBeRetriedAfterCancelOrFailure(t *testing.T) {
+	jsBytes, err := fs.ReadFile(Assets, "chat/chat.js")
+	if err != nil {
+		t.Fatal(err)
+	}
+	js := string(jsBytes)
+	for _, marker := range []string{
+		`finally {`,
+		`if (projectSelect.value === "__choose__") projectSelect.value = ""`,
+	} {
+		if !strings.Contains(js, marker) {
+			t.Errorf("directory retry behavior missing %q", marker)
+		}
+	}
+}

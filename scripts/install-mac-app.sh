@@ -11,6 +11,11 @@ previous="${parent}/.CodeAfar.previous.$$"
 had_previous=0
 installed=0
 
+installed_pid() {
+  /bin/ps -axo pid=,command= | /usr/bin/awk -v executable="${destination}/Contents/MacOS/codeafar" \
+    '$2 == executable && !found { print $1; found = 1 }'
+}
+
 cleanup() {
   /bin/rm -rf "${staging}"
   if [[ "${installed}" == "1" ]]; then
@@ -39,10 +44,17 @@ trap cleanup EXIT
 /usr/bin/codesign --verify --deep --strict "${staging}"
 
 /usr/bin/pkill -x codeafar >/dev/null 2>&1 || true
+/usr/bin/pkill -x claude-phone >/dev/null 2>&1 || true
 for _ in {1..40}; do
-  /usr/bin/pgrep -x codeafar >/dev/null 2>&1 || break
+  if [[ -z "$(installed_pid)" ]] && ! /usr/sbin/lsof -nP -iTCP:9877 -sTCP:LISTEN >/dev/null 2>&1; then
+    break
+  fi
   sleep 0.1
 done
+if /usr/sbin/lsof -nP -iTCP:9877 -sTCP:LISTEN >/dev/null 2>&1; then
+  echo "Port 9877 is still occupied after stopping the previous CodeAfar version" >&2
+  exit 1
+fi
 
 if [[ -d "${destination}" ]]; then
   /bin/mv "${destination}" "${previous}"
@@ -57,9 +69,14 @@ fi
 
 open "${destination}"
 for _ in {1..60}; do
-  if /usr/bin/pgrep -x codeafar >/dev/null 2>&1; then
+  pid="$(installed_pid)"
+  if [[ -n "${pid}" ]] && /usr/sbin/lsof -nP -a -p "${pid}" -iTCP:9877 -sTCP:LISTEN >/dev/null 2>&1; then
+    sleep 0.5
+    if ! /bin/kill -0 "${pid}" >/dev/null 2>&1; then
+      continue
+    fi
     installed=1
-    echo "Installed and launched ${destination}"
+    echo "Installed and launched ${destination} (pid ${pid})"
     exit 0
   fi
   sleep 0.25
