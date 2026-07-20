@@ -70,6 +70,12 @@ func (s *Session) SetStatus(status string) {
 	s.mu.Unlock()
 }
 
+func (s *Session) SetPermission(permission string) {
+	s.mu.Lock()
+	s.Permission = permission
+	s.mu.Unlock()
+}
+
 // Subscribers 返回当前订阅者设备 ID 列表（快照）。
 func (s *Session) Subscribers() []string {
 	s.mu.RLock()

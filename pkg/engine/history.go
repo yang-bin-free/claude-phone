@@ -36,6 +36,16 @@ func newHistoryStore(dataDir string) *historyStore {
 func (s *historyStore) CreateSession(sess *session.Session) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	return s.writeSessionLocked(sess)
+}
+
+func (s *historyStore) UpdateSession(sess *session.Session) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.writeSessionLocked(sess)
+}
+
+func (s *historyStore) writeSessionLocked(sess *session.Session) error {
 	dir := filepath.Join(s.root, sess.ID)
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return err

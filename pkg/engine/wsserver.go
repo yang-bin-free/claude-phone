@@ -190,6 +190,15 @@ func (e *Engine) handleControl(cl *client, currentSession string, raw []byte) (s
 			return "", nil
 		}
 		return currentSession, nil
+	case protocol.ActionSetPermission:
+		s, ok := e.manager.Get(msg.SessionID)
+		if !ok {
+			return currentSession, session.ErrSessionNotFound
+		}
+		if s.Owner != cl.deviceID {
+			return currentSession, session.ErrSessionNotOwner
+		}
+		return currentSession, e.requestPermissionChange(s, msg.PermissionMode)
 	case protocol.ActionListSessions:
 		limit := msg.Limit
 		if limit <= 0 {

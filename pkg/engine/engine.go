@@ -24,28 +24,29 @@ type Engine struct {
 	sessionExists func(string, string) bool
 	server        *http.Server
 
-	mu             sync.RWMutex
-	resumeMu       sync.Mutex
-	createMu       sync.Mutex
-	clients        map[string]*client
-	procs          map[string]claudeProc
-	projects       *projectStore
-	devices        *deviceStore
-	history        *historyStore
-	permissions    *permissionStore
-	templates      *templateStore
-	startedAt      time.Time
-	configMu       sync.RWMutex
-	runtime        runtimeConfig
-	stopWatch      chan struct{}
-	closeOnce      sync.Once
-	power          powerInhibitor
-	activity       map[string]time.Time
-	healthState    map[string]string
-	queues         map[string][]queuedPrompt
-	busy           map[string]bool
-	queueSeq       uint64
-	createRequests map[string]createResult
+	mu                 sync.RWMutex
+	resumeMu           sync.Mutex
+	createMu           sync.Mutex
+	clients            map[string]*client
+	procs              map[string]claudeProc
+	projects           *projectStore
+	devices            *deviceStore
+	history            *historyStore
+	permissions        *permissionStore
+	templates          *templateStore
+	startedAt          time.Time
+	configMu           sync.RWMutex
+	runtime            runtimeConfig
+	stopWatch          chan struct{}
+	closeOnce          sync.Once
+	power              powerInhibitor
+	activity           map[string]time.Time
+	healthState        map[string]string
+	queues             map[string][]queuedPrompt
+	busy               map[string]bool
+	queueSeq           uint64
+	createRequests     map[string]createResult
+	pendingPermissions map[string]string
 }
 
 type createResult struct {
@@ -56,25 +57,26 @@ type createResult struct {
 func New(cfg Config) *Engine {
 	cfg = cfg.withDefaults()
 	e := &Engine{
-		cfg:            cfg,
-		manager:        session.NewManager(session.ManagerConfig{MaxConcurrent: cfg.MaxConcurrentSession}),
-		clients:        map[string]*client{},
-		procs:          map[string]claudeProc{},
-		projects:       newProjectStore(cfg.DataDir),
-		devices:        newDeviceStore(cfg.DataDir),
-		history:        newHistoryStore(cfg.DataDir),
-		permissions:    newPermissionStore(cfg.DataDir),
-		templates:      newTemplateStore(cfg.DataDir),
-		startedAt:      time.Now(),
-		runtime:        runtimeConfig{DefaultWorkingDir: cfg.DefaultWorkingDir, DefaultPermission: cfg.DefaultPermission, MaxConcurrentSessions: cfg.MaxConcurrentSession},
-		sessionExists:  session.ClaudeSessionExists,
-		stopWatch:      make(chan struct{}),
-		power:          newPowerInhibitor(),
-		activity:       map[string]time.Time{},
-		healthState:    map[string]string{},
-		queues:         map[string][]queuedPrompt{},
-		busy:           map[string]bool{},
-		createRequests: map[string]createResult{},
+		cfg:                cfg,
+		manager:            session.NewManager(session.ManagerConfig{MaxConcurrent: cfg.MaxConcurrentSession}),
+		clients:            map[string]*client{},
+		procs:              map[string]claudeProc{},
+		projects:           newProjectStore(cfg.DataDir),
+		devices:            newDeviceStore(cfg.DataDir),
+		history:            newHistoryStore(cfg.DataDir),
+		permissions:        newPermissionStore(cfg.DataDir),
+		templates:          newTemplateStore(cfg.DataDir),
+		startedAt:          time.Now(),
+		runtime:            runtimeConfig{DefaultWorkingDir: cfg.DefaultWorkingDir, DefaultPermission: cfg.DefaultPermission, MaxConcurrentSessions: cfg.MaxConcurrentSession},
+		sessionExists:      session.ClaudeSessionExists,
+		stopWatch:          make(chan struct{}),
+		power:              newPowerInhibitor(),
+		activity:           map[string]time.Time{},
+		healthState:        map[string]string{},
+		queues:             map[string][]queuedPrompt{},
+		busy:               map[string]bool{},
+		createRequests:     map[string]createResult{},
+		pendingPermissions: map[string]string{},
 	}
 	e.providers = provider.NewRegistry(provider.NewClaudeAdapter(cfg.ClaudeBin))
 	if persisted, err := e.history.Restore(); err == nil {

@@ -204,6 +204,56 @@ func TestWebSocket_ListProvidersReturnsDescriptor(t *testing.T) {
 	}
 }
 
+func TestWebSocket_PermissionChangeRestartsIdleSessionAndPersists(t *testing.T) {
+	dataDir := t.TempDir()
+	e := New(Config{DataDir: dataDir, DefaultWorkingDir: ".", DeviceTokens: map[string]string{"device": "Mac"}})
+	adapter := &recordingAdapter{id: provider.ClaudeID, permissions: []string{"default", "plan"}}
+	e.SetProviderRegistry(provider.NewRegistry(adapter))
+	server, conn := openAuthenticatedEngine(t, e, "device")
+	defer server.Close()
+	defer conn.Close()
+	writeJSON(t, conn, protocol.ControlMsg{Type: protocol.TypeControl, Action: protocol.ActionCreateSession, WorkingDir: ".", PermissionMode: "default"})
+	created := readSessionCreated(t, conn)
+
+	writeJSON(t, conn, protocol.ControlMsg{Type: protocol.TypeControl, Action: protocol.ActionSetPermission, SessionID: created.SessionID, PermissionMode: "plan"})
+	changed := readPermissionChanged(t, conn)
+	if changed.PermissionMode != "plan" || changed.Pending {
+		t.Fatalf("changed=%+v", changed)
+	}
+	if len(adapter.configs) != 2 || adapter.configs[1].Permission != "plan" || adapter.processes[0].stopCalls != 1 {
+		t.Fatalf("configs=%+v oldProcess=%+v", adapter.configs, adapter.processes[0])
+	}
+	restored, err := e.history.Restore()
+	if err != nil || len(restored) != 1 || restored[0].Permission != "plan" {
+		t.Fatalf("restored=%+v err=%v", restored, err)
+	}
+}
+
+func TestWebSocket_PermissionChangeWhileBusyIsAppliedAfterDone(t *testing.T) {
+	e := New(Config{DataDir: t.TempDir(), DefaultWorkingDir: ".", DeviceTokens: map[string]string{"device": "Mac"}})
+	adapter := &recordingAdapter{id: provider.ClaudeID, permissions: []string{"default", "plan"}}
+	e.SetProviderRegistry(provider.NewRegistry(adapter))
+	server, conn := openAuthenticatedEngine(t, e, "device")
+	defer server.Close()
+	defer conn.Close()
+	writeJSON(t, conn, protocol.ControlMsg{Type: protocol.TypeControl, Action: protocol.ActionCreateSession, WorkingDir: ".", PermissionMode: "default"})
+	created := readSessionCreated(t, conn)
+	writeJSON(t, conn, protocol.TextMsg{Type: protocol.TypeText, Content: "busy"})
+
+	writeJSON(t, conn, protocol.ControlMsg{Type: protocol.TypeControl, Action: protocol.ActionSetPermission, SessionID: created.SessionID, PermissionMode: "plan"})
+	pending := readPermissionChanged(t, conn)
+	if !pending.Pending || len(adapter.configs) != 1 {
+		t.Fatalf("pending=%+v configs=%d", pending, len(adapter.configs))
+	}
+	sess, _ := e.manager.Get(created.SessionID)
+	e.handleProcOutput(sess, adapter.processes[0], []byte(`{"type":"done"}`))
+	assertType(t, conn, protocol.TypeDone)
+	changed := readPermissionChanged(t, conn)
+	if changed.Pending || changed.PermissionMode != "plan" || len(adapter.configs) != 2 {
+		t.Fatalf("changed=%+v configs=%d", changed, len(adapter.configs))
+	}
+}
+
 func TestWebSocket_RejectsUnknownDevice(t *testing.T) {
 	e := New(Config{DeviceTokens: map[string]string{"dt_ok": "Pixel"}})
 	ts := httptest.NewServer(e.Handler())
@@ -355,22 +405,61 @@ func readProtocolError(t *testing.T, conn *websocket.Conn) protocol.ErrorMsg {
 	return got
 }
 
+func readPermissionChanged(t *testing.T, conn *websocket.Conn) protocol.PermissionChangedMsg {
+	t.Helper()
+	_, payload, err := conn.ReadMessage()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got protocol.PermissionChangedMsg
+	if err := json.Unmarshal(payload, &got); err != nil {
+		t.Fatal(err)
+	}
+	if got.Type != protocol.TypePermissionChanged {
+		t.Fatalf("message=%s", payload)
+	}
+	return got
+}
+
 type recordingAdapter struct {
-	id      string
-	configs []provider.SessionConfig
+	id          string
+	permissions []string
+	configs     []provider.SessionConfig
+	processes   []*recordingProcess
 }
 
 func (a *recordingAdapter) Descriptor() provider.Descriptor {
+	permissions := a.permissions
+	if len(permissions) == 0 {
+		permissions = []string{"default"}
+	}
+	options := make([]provider.PermissionOption, 0, len(permissions))
+	for _, id := range permissions {
+		options = append(options, provider.PermissionOption{ID: id, Label: id, Mutable: true})
+	}
 	return provider.Descriptor{
 		ID: a.id, Name: "Test Provider", Available: true,
-		Permissions: []provider.PermissionOption{{ID: "default", Label: "每次询问", Mutable: true}},
+		Permissions: options,
 	}
 }
 
 func (a *recordingAdapter) NewProcess(config provider.SessionConfig) provider.Process {
 	a.configs = append(a.configs, config)
-	return &stubClaudeProc{}
+	process := &recordingProcess{}
+	a.processes = append(a.processes, process)
+	return process
 }
+
+type recordingProcess struct {
+	onOutput  session.OutputFunc
+	stopCalls int
+	sent      []string
+}
+
+func (p *recordingProcess) OnOutput(fn session.OutputFunc) { p.onOutput = fn }
+func (p *recordingProcess) Start() error                   { return nil }
+func (p *recordingProcess) Send(text string) error         { p.sent = append(p.sent, text); return nil }
+func (p *recordingProcess) Stop() error                    { p.stopCalls++; return nil }
 
 func TestHandleControl_LeaveSession(t *testing.T) {
 	e := New(Config{})

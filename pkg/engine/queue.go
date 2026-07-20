@@ -22,7 +22,20 @@ func (e *Engine) handleProcOutput(sess *session.Session, proc claudeProc, payloa
 			Type string `json:"type"`
 		}
 		if json.Unmarshal(message, &head) == nil && head.Type == protocol.TypeDone {
-			e.advanceQueue(sess, proc)
+			if permission, ok := e.takePendingPermission(sess.ID); ok {
+				go func() {
+					if err := e.applyPermissionChange(sess, permission); err != nil {
+						problem, _ := json.Marshal(protocol.NewError("ENGINE_ERROR", err.Error()))
+						sess.Broadcast(problem)
+					}
+					e.mu.RLock()
+					nextProcess := e.procs[sess.ID]
+					e.mu.RUnlock()
+					e.advanceQueue(sess, nextProcess)
+				}()
+			} else {
+				e.advanceQueue(sess, proc)
+			}
 		}
 	}
 }

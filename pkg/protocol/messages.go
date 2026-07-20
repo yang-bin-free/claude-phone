@@ -18,23 +18,24 @@ const (
 	TypePermissionResponse = "permission_response"
 	TypePermissionRule     = "permission_rule"
 
-	TypeHello           = "hello"
-	TypeProjectList     = "project_list"
-	TypeProviderList    = "provider_list"
-	TypeTemplateList    = "template_list"
-	TypeSessionList     = "session_list"
-	TypeSessionCreated  = "session_created"
-	TypeSessionSelected = "session_selected"
-	TypeSessionStopped  = "session_stopped"
-	TypeThinking        = "thinking"
-	TypeToken           = "token"
-	TypeToolUse         = "tool_use"
-	TypeDone            = "done"
-	TypeError           = "error"
-	TypeQueued          = "queued"
-	TypeDequeued        = "dequeued"
-	TypePong            = "pong"
-	TypeHealth          = "health"
+	TypeHello             = "hello"
+	TypeProjectList       = "project_list"
+	TypeProviderList      = "provider_list"
+	TypeTemplateList      = "template_list"
+	TypeSessionList       = "session_list"
+	TypeSessionCreated    = "session_created"
+	TypeSessionSelected   = "session_selected"
+	TypeSessionStopped    = "session_stopped"
+	TypeThinking          = "thinking"
+	TypeToken             = "token"
+	TypeToolUse           = "tool_use"
+	TypeDone              = "done"
+	TypeError             = "error"
+	TypeQueued            = "queued"
+	TypeDequeued          = "dequeued"
+	TypePong              = "pong"
+	TypeHealth            = "health"
+	TypePermissionChanged = "permission_changed"
 )
 
 // control action 常量。
@@ -199,6 +200,13 @@ type SessionCreatedMsg struct {
 type SessionStoppedMsg struct {
 	Type      string `json:"type"`
 	SessionID string `json:"sessionId"`
+}
+
+type PermissionChangedMsg struct {
+	Type           string `json:"type"`
+	SessionID      string `json:"sessionId"`
+	PermissionMode string `json:"permissionMode"`
+	Pending        bool   `json:"pending"`
 }
 
 type TokenMsg struct {
