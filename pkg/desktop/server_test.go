@@ -1,9 +1,13 @@
 package desktop
 
 import (
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
+
+	"github.com/yang-bin-free/claude-phone/pkg/protocol"
 )
 
 func TestHandlerServesShellAssetsAndDelegatesAPIs(t *testing.T) {
@@ -51,6 +55,57 @@ func TestHandlerServesShellAssetsAndDelegatesAPIs(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestDesktopProjectEndpointRejectsNonLoopbackRequest(t *testing.T) {
+	h := NewHandler(HandlerOptions{AddProject: func(string) (protocol.ProjectInfo, error) {
+		t.Fatal("non-loopback request reached project callback")
+		return protocol.ProjectInfo{}, nil
+	}})
+	request := httptest.NewRequest(http.MethodPost, "/desktop/projects", strings.NewReader(`{"path":"/tmp"}`))
+	request.RemoteAddr = "100.64.0.2:1234"
+	response := httptest.NewRecorder()
+
+	h.ServeHTTP(response, request)
+
+	if response.Code != http.StatusForbidden {
+		t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
+	}
+}
+
+func TestDesktopProjectEndpointAddsPickedDirectory(t *testing.T) {
+	directory := t.TempDir()
+	h := NewHandler(HandlerOptions{AddProject: func(path string) (protocol.ProjectInfo, error) {
+		if path != directory {
+			t.Fatalf("path=%q want %q", path, directory)
+		}
+		return protocol.ProjectInfo{Name: "Demo", Path: path, Permission: "default"}, nil
+	}})
+	request := httptest.NewRequest(http.MethodPost, "/desktop/projects", strings.NewReader(`{"path":`+quotedJSON(t, directory)+`}`))
+	request.RemoteAddr = "127.0.0.1:1234"
+	response := httptest.NewRecorder()
+
+	h.ServeHTTP(response, request)
+
+	if response.Code != http.StatusCreated {
+		t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
+	}
+	var got protocol.ProjectInfo
+	if err := json.Unmarshal(response.Body.Bytes(), &got); err != nil {
+		t.Fatal(err)
+	}
+	if got.Path != directory || got.Name != "Demo" {
+		t.Fatalf("project=%+v", got)
+	}
+}
+
+func quotedJSON(t *testing.T, value string) string {
+	t.Helper()
+	b, err := json.Marshal(value)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(b)
 }
 
 func TestHandlerKeepsShellAvailableWithoutEngine(t *testing.T) {

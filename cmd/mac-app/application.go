@@ -11,12 +11,14 @@ import (
 
 	"github.com/yang-bin-free/claude-phone/pkg/desktop"
 	"github.com/yang-bin-free/claude-phone/pkg/engine"
+	"github.com/yang-bin-free/claude-phone/pkg/protocol"
 )
 
 type managedEngine interface {
 	Handler() http.Handler
 	AdminHandler(string) http.Handler
 	Status() engine.StatusReport
+	AddProject(string) (protocol.ProjectInfo, error)
 	Close() error
 }
 
@@ -78,6 +80,7 @@ func newApplication(parent context.Context, cfg appConfig, deps appDependencies)
 		EngineHandler: app.engineHandler,
 		AdminHandler:  app.adminHandler,
 		Status:        app.Status,
+		AddProject:    app.addProject,
 	})
 	return app
 }
@@ -223,6 +226,16 @@ func (a *application) adminHandler() http.Handler {
 		return nil
 	}
 	return a.engine.AdminHandler(a.cfg.AdminToken)
+}
+
+func (a *application) addProject(path string) (protocol.ProjectInfo, error) {
+	a.mu.RLock()
+	instance := a.engine
+	a.mu.RUnlock()
+	if instance == nil {
+		return protocol.ProjectInfo{}, errors.New("desktop engine unavailable")
+	}
+	return instance.AddProject(path)
 }
 
 func (a *application) setUnavailable(err error, paused bool) {

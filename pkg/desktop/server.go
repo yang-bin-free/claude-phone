@@ -3,8 +3,10 @@ package desktop
 import (
 	"encoding/json"
 	"io/fs"
+	"net"
 	"net/http"
 
+	"github.com/yang-bin-free/claude-phone/pkg/protocol"
 	webassets "github.com/yang-bin-free/claude-phone/web"
 )
 
@@ -20,6 +22,7 @@ type HandlerOptions struct {
 	EngineHandler func() http.Handler
 	AdminHandler  func() http.Handler
 	Status        func() AppStatus
+	AddProject    func(string) (protocol.ProjectInfo, error)
 }
 
 func NewHandler(options HandlerOptions) http.Handler {
@@ -34,6 +37,31 @@ func NewHandler(options HandlerOptions) http.Handler {
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(status)
 	})
+	mux.HandleFunc("POST /desktop/projects", func(w http.ResponseWriter, r *http.Request) {
+		if !isLoopbackRequest(r) {
+			http.Error(w, "forbidden", http.StatusForbidden)
+			return
+		}
+		if options.AddProject == nil {
+			http.Error(w, "desktop engine unavailable", http.StatusServiceUnavailable)
+			return
+		}
+		var request struct {
+			Path string `json:"path"`
+		}
+		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4096)).Decode(&request); err != nil || request.Path == "" {
+			http.Error(w, "invalid request", http.StatusBadRequest)
+			return
+		}
+		project, err := options.AddProject(request.Path)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusCreated)
+		_ = json.NewEncoder(w).Encode(project)
+	})
 	mux.HandleFunc("/", serveAsset("chat/index.html", "text/html"))
 	mux.HandleFunc("/assets/chat.js", serveAsset("chat/chat.js", "text/javascript"))
 	mux.HandleFunc("/assets/admin.js", serveAsset("admin/admin.js", "text/javascript"))
@@ -42,6 +70,15 @@ func NewHandler(options HandlerOptions) http.Handler {
 	mux.HandleFunc("/assets/mobile.css", serveAsset("chat/mobile.css", "text/css"))
 	mux.HandleFunc("/assets/admin.css", serveAsset("admin/admin.css", "text/css"))
 	return mux
+}
+
+func isLoopbackRequest(r *http.Request) bool {
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		return false
+	}
+	ip := net.ParseIP(host)
+	return ip != nil && ip.IsLoopback()
 }
 
 func availableHandler(provider func() http.Handler) http.Handler {

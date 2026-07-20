@@ -10,12 +10,23 @@ import (
 	"sync"
 
 	"github.com/yang-bin-free/claude-phone/pkg/adminproto"
+	"github.com/yang-bin-free/claude-phone/pkg/protocol"
 	"gopkg.in/yaml.v3"
 )
 
 type projectStore struct {
 	mu   sync.Mutex
 	path string
+}
+
+// AddProject authorizes a local directory selected by the desktop shell.
+func (e *Engine) AddProject(path string) (protocol.ProjectInfo, error) {
+	permission := e.runtimeConfig().DefaultPermission
+	project, err := e.projects.Add(adminproto.Project{Path: path, Permission: permission})
+	if err != nil {
+		return protocol.ProjectInfo{}, err
+	}
+	return protocol.ProjectInfo{Name: project.Name, Path: project.Path, Permission: project.Permission}, nil
 }
 
 type projectsFile struct {

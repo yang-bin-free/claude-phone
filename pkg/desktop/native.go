@@ -6,6 +6,11 @@ import (
 	"net/url"
 )
 
+const (
+	directoryPickerBinding   = "codeAfarChooseDirectory"
+	directoryPickerBootstrap = "window.codeAfarNative = Object.freeze({ chooseDirectory: () => window.codeAfarChooseDirectory() });"
+)
+
 type Commands struct {
 	States          <-chan MenuState
 	Pause           func() error

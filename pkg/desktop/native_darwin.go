@@ -5,6 +5,7 @@ package desktop
 /*
 #cgo LDFLAGS: -framework Cocoa
 #include "native_darwin.h"
+#include <stdlib.h>
 */
 import "C"
 
@@ -118,10 +119,21 @@ func runNative(ctx context.Context, pageURL string, commands Commands) error {
 		window = webview.New(false)
 		window.SetTitle("Claude Phone")
 		window.SetSize(1180, 760, webview.HintNone)
-		window.Navigate(pageURL)
 		C.cpConfigureWindow(unsafe.Pointer(window.Window()))
 	})
 	defer window.Destroy()
+	if err := window.Bind(directoryPickerBinding, func() string {
+		value := C.caChooseDirectory()
+		if value == nil {
+			return ""
+		}
+		defer C.free(unsafe.Pointer(value))
+		return C.GoString(value)
+	}); err != nil {
+		return err
+	}
+	window.Init(directoryPickerBootstrap)
+	window.Navigate(pageURL)
 
 	go func() {
 		select {

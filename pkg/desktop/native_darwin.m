@@ -1,6 +1,7 @@
 #import <Cocoa/Cocoa.h>
 #import <objc/runtime.h>
 #import "native_darwin.h"
+#include <string.h>
 
 @interface CPWindowDelegate : NSObject <NSWindowDelegate>
 @end
@@ -49,4 +50,17 @@ void cpShowWindow(void *windowPtr) {
 void cpHideWindow(void *windowPtr) {
     NSWindow *window = (__bridge NSWindow *)windowPtr;
     [window orderOut:nil];
+}
+
+char *caChooseDirectory(void) {
+    NSOpenPanel *panel = [NSOpenPanel openPanel];
+    panel.canChooseDirectories = YES;
+    panel.canChooseFiles = NO;
+    panel.allowsMultipleSelection = NO;
+    panel.canCreateDirectories = NO;
+    panel.prompt = @"选择";
+    if ([panel runModal] != NSModalResponseOK || panel.URL == nil) {
+        return strdup("");
+    }
+    return strdup(panel.URL.path.UTF8String);
 }

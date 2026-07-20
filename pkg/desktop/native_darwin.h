@@ -4,5 +4,6 @@
 void cpConfigureWindow(void *window);
 void cpShowWindow(void *window);
 void cpHideWindow(void *window);
+char *caChooseDirectory(void);
 
 #endif

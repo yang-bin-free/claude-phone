@@ -5,16 +5,24 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"testing"
 
 	"github.com/yang-bin-free/claude-phone/pkg/desktop"
 	"github.com/yang-bin-free/claude-phone/pkg/engine"
+	"github.com/yang-bin-free/claude-phone/pkg/protocol"
 )
 
 type fakeManagedEngine struct {
-	closed atomic.Bool
+	closed       atomic.Bool
+	addedProject string
+}
+
+func (e *fakeManagedEngine) AddProject(path string) (protocol.ProjectInfo, error) {
+	e.addedProject = path
+	return protocol.ProjectInfo{Name: "Demo", Path: path, Permission: "default"}, nil
 }
 
 func (e *fakeManagedEngine) Handler() http.Handler {
@@ -85,6 +93,29 @@ func TestApplicationPauseAndResumeKeepsDesktopHandler(t *testing.T) {
 	}
 	if len(created) != 2 || !app.Status().Ready {
 		t.Fatalf("created=%d status=%+v", len(created), app.Status())
+	}
+}
+
+func TestApplicationDesktopProjectEndpointUsesCurrentEngine(t *testing.T) {
+	instance := &fakeManagedEngine{}
+	app := newApplication(context.Background(), appConfig{DesktopAddr: "127.0.0.1:0", ClaudeBin: "claude", AdminToken: "token"}, appDependencies{
+		resolveClaude: func(string) (string, error) { return "/tmp/claude", nil },
+		detectVersion: func(string) (string, error) { return "1.2.3", nil },
+		newEngine:     func(engine.Config) managedEngine { return instance },
+	})
+	if err := app.Start(); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = app.Close() })
+	directory := t.TempDir()
+	request := httptest.NewRequest(http.MethodPost, "/desktop/projects", strings.NewReader(`{"path":`+strconv.Quote(directory)+`}`))
+	request.RemoteAddr = "127.0.0.1:1234"
+	response := httptest.NewRecorder()
+
+	app.Handler().ServeHTTP(response, request)
+
+	if response.Code != http.StatusCreated || instance.addedProject != directory {
+		t.Fatalf("status=%d added=%q body=%s", response.Code, instance.addedProject, response.Body.String())
 	}
 }
 

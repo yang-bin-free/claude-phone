@@ -2,6 +2,7 @@ package desktop
 
 import (
 	"net/url"
+	"strings"
 	"testing"
 )
 
@@ -16,6 +17,15 @@ func TestURLWithAdminTokenUsesFragment(t *testing.T) {
 	}
 	if parsed.RawQuery != "" || parsed.Fragment != "token=secret+value" {
 		t.Fatalf("url=%q", got)
+	}
+}
+
+func TestDirectoryPickerBootstrapExposesNarrowBridge(t *testing.T) {
+	if !strings.Contains(directoryPickerBootstrap, "window.codeAfarNative") || !strings.Contains(directoryPickerBootstrap, directoryPickerBinding) {
+		t.Fatalf("bootstrap=%q binding=%q", directoryPickerBootstrap, directoryPickerBinding)
+	}
+	if strings.Contains(directoryPickerBootstrap, "fetch") {
+		t.Fatalf("native bridge should only expose directory selection: %q", directoryPickerBootstrap)
 	}
 }
 
