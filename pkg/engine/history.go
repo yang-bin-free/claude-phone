@@ -19,14 +19,15 @@ type historyStore struct {
 }
 
 type sessionMeta struct {
-	SessionID  string `json:"sessionId"`
-	Name       string `json:"name"`
-	Cwd        string `json:"cwd"`
-	Owner      string `json:"owner"`
-	Permission string `json:"permission"`
-	Provider   string `json:"provider,omitempty"`
-	Model      string `json:"model,omitempty"`
-	CreatedAt  int64  `json:"createdAt"`
+	SessionID         string `json:"sessionId"`
+	Name              string `json:"name"`
+	Cwd               string `json:"cwd"`
+	Owner             string `json:"owner"`
+	Permission        string `json:"permission"`
+	Provider          string `json:"provider,omitempty"`
+	ProviderSessionID string `json:"providerSessionId,omitempty"`
+	Model             string `json:"model,omitempty"`
+	CreatedAt         int64  `json:"createdAt"`
 }
 
 func newHistoryStore(dataDir string) *historyStore {
@@ -50,7 +51,7 @@ func (s *historyStore) writeSessionLocked(sess *session.Session) error {
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return err
 	}
-	meta := sessionMeta{SessionID: sess.ID, Name: sess.Name, Cwd: sess.Cwd, Owner: sess.Owner, Permission: sess.PermissionMode(), Provider: sess.Provider, Model: sess.Model, CreatedAt: sess.CreatedAt}
+	meta := sessionMeta{SessionID: sess.ID, Name: sess.Name, Cwd: sess.Cwd, Owner: sess.Owner, Permission: sess.PermissionMode(), Provider: sess.Provider, ProviderSessionID: sess.ProviderSessionIdentity(), Model: sess.Model, CreatedAt: sess.CreatedAt}
 	b, err := json.MarshalIndent(meta, "", "  ")
 	if err != nil {
 		return err
@@ -136,6 +137,7 @@ func (s *historyStore) Restore() ([]*session.Session, error) {
 			sess.Provider = meta.Provider
 		}
 		sess.Model = meta.Model
+		sess.SetProviderSessionID(meta.ProviderSessionID)
 		sess.CreatedAt = meta.CreatedAt
 		sess.SetStatus("dormant")
 		sessions = append(sessions, sess)

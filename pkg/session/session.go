@@ -18,9 +18,10 @@ type Session struct {
 	Status     string // active | dormant | stopped
 	CreatedAt  int64
 
-	mu     sync.RWMutex
-	subs   map[string]struct{}
-	sender SenderFunc
+	mu                sync.RWMutex
+	providerSessionID string
+	subs              map[string]struct{}
+	sender            SenderFunc
 }
 
 // NewSession 创建会话，owner 自动成为首个订阅者。
@@ -80,6 +81,24 @@ func (s *Session) PermissionMode() string {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.Permission
+}
+
+// SetProviderSessionID records an upstream provider conversation ID and
+// reports whether it changed. Empty IDs are never accepted.
+func (s *Session) SetProviderSessionID(id string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if id == "" || s.providerSessionID == id {
+		return false
+	}
+	s.providerSessionID = id
+	return true
+}
+
+func (s *Session) ProviderSessionIdentity() string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.providerSessionID
 }
 
 // Subscribers 返回当前订阅者设备 ID 列表（快照）。

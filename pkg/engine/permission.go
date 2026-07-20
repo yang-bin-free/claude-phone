@@ -67,7 +67,7 @@ func (e *Engine) applyPermissionChange(sess *session.Session, permission string)
 
 func (e *Engine) newSessionProcess(adapter provider.Adapter, sess *session.Session, permission string) provider.Process {
 	proc := adapter.NewProcess(provider.SessionConfig{
-		Cwd: sess.Cwd, SessionID: sess.ID, Permission: permission, Model: sess.Model,
+		Cwd: sess.Cwd, SessionID: sess.ID, ProviderSessionID: sess.ProviderSessionIdentity(), Permission: permission, Model: sess.Model,
 		AddDirs: []string{sess.Cwd}, Resume: e.sessionExists(sess.Cwd, sess.ID),
 		AllowedTools: e.permissions.AllowedTools(),
 	})

@@ -380,11 +380,8 @@ func (e *Engine) createSession(cl *client, msg protocol.ControlMsg) (string, err
 	}
 
 	proc := adapter.NewProcess(provider.SessionConfig{
-		Cwd:          cwd,
-		SessionID:    s.ID,
-		Permission:   permission,
-		AddDirs:      []string{cwd},
-		AllowedTools: e.permissions.AllowedTools(),
+		Cwd: cwd, SessionID: s.ID, ProviderSessionID: s.ProviderSessionIdentity(),
+		Permission: permission, AddDirs: []string{cwd}, AllowedTools: e.permissions.AllowedTools(),
 	})
 	proc.OnOutput(func(payload []byte) {
 		e.handleProcOutput(s, proc, payload)
@@ -429,7 +426,7 @@ func (e *Engine) resumeSession(s *session.Session) error {
 		return errProviderNotAvailable
 	}
 	proc := adapter.NewProcess(provider.SessionConfig{
-		Cwd: s.Cwd, SessionID: s.ID, Permission: s.PermissionMode(), Model: s.Model,
+		Cwd: s.Cwd, SessionID: s.ID, ProviderSessionID: s.ProviderSessionIdentity(), Permission: s.PermissionMode(), Model: s.Model,
 		AddDirs: []string{s.Cwd}, Resume: e.sessionExists(s.Cwd, s.ID),
 		AllowedTools: e.permissions.AllowedTools(),
 	})

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 
 	"github.com/yang-bin-free/claude-phone/pkg/protocol"
+	"github.com/yang-bin-free/claude-phone/pkg/provider"
 	"github.com/yang-bin-free/claude-phone/pkg/session"
 )
 
@@ -23,6 +24,14 @@ func (e *Engine) handleProcOutput(sess *session.Session, proc claudeProc, payloa
 		return
 	}
 	e.recordActivity(sess.ID)
+	if identity, ok := proc.(provider.SessionIdentity); ok {
+		if sess.SetProviderSessionID(identity.ProviderSessionID()) {
+			if err := e.updateSession(sess); err != nil {
+				problem, _ := json.Marshal(protocol.NewError("ENGINE_ERROR", "无法保存引擎会话标识: "+err.Error()))
+				sess.Broadcast(problem)
+			}
+		}
+	}
 	translated := translateClaudeOutput(payload)
 	for _, message := range translated {
 		_ = e.history.Append(sess.ID, message)

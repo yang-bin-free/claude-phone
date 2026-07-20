@@ -7,7 +7,10 @@ import (
 	"github.com/yang-bin-free/claude-phone/pkg/session"
 )
 
-const ClaudeID = "claude"
+const (
+	ClaudeID = "claude"
+	CodexID  = "codex"
+)
 
 type PermissionOption struct {
 	ID          string `json:"id"`
@@ -27,13 +30,14 @@ type Descriptor struct {
 }
 
 type SessionConfig struct {
-	Cwd          string
-	SessionID    string
-	Permission   string
-	Model        string
-	Resume       bool
-	AddDirs      []string
-	AllowedTools []string
+	Cwd               string
+	SessionID         string
+	ProviderSessionID string
+	Permission        string
+	Model             string
+	Resume            bool
+	AddDirs           []string
+	AllowedTools      []string
 }
 
 type Process interface {
@@ -41,6 +45,12 @@ type Process interface {
 	Start() error
 	Send(string) error
 	Stop() error
+}
+
+// SessionIdentity is implemented by providers whose upstream conversation ID
+// differs from CodeAfar's local session ID.
+type SessionIdentity interface {
+	ProviderSessionID() string
 }
 
 type Adapter interface {

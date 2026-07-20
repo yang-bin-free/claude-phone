@@ -38,3 +38,16 @@ func TestBroadcastFanOut(t *testing.T) {
 		t.Fatalf("fan-out wrong: %v", got)
 	}
 }
+
+func TestSessionProviderIdentityUpdatesOnlyOnChange(t *testing.T) {
+	s := NewSession("local", "Codex", "/p", "device-A")
+	if !s.SetProviderSessionID("thread-123") {
+		t.Fatal("first provider session ID was not recorded")
+	}
+	if s.SetProviderSessionID("thread-123") {
+		t.Fatal("unchanged provider session ID reported a change")
+	}
+	if got := s.ProviderSessionIdentity(); got != "thread-123" {
+		t.Fatalf("provider session ID = %q", got)
+	}
+}

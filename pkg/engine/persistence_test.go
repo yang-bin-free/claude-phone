@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/yang-bin-free/claude-phone/pkg/provider"
 	"github.com/yang-bin-free/claude-phone/pkg/session"
 )
 
@@ -52,6 +53,23 @@ func TestHistoryRestoreDefaultsMissingProviderToClaude(t *testing.T) {
 	loaded, ok := restarted.manager.Get("legacy")
 	if !ok || loaded.Provider != "claude" {
 		t.Fatalf("loaded=%+v ok=%v", loaded, ok)
+	}
+}
+
+func TestHistoryRoundTripsProviderSessionID(t *testing.T) {
+	store := newHistoryStore(t.TempDir())
+	s := session.NewSession("local", "Codex", "/tmp", "device")
+	s.Provider = provider.CodexID
+	s.SetProviderSessionID("thread-123")
+	if err := store.CreateSession(s); err != nil {
+		t.Fatal(err)
+	}
+	restored, err := store.Restore()
+	if err != nil || len(restored) != 1 {
+		t.Fatalf("restored=%+v err=%v", restored, err)
+	}
+	if got := restored[0].ProviderSessionIdentity(); got != "thread-123" {
+		t.Fatalf("provider session ID = %q", got)
 	}
 }
 
