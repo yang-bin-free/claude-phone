@@ -1,17 +1,17 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-app_path="${APP_PATH:-/Applications/Claude Phone.app}"
-process_name="claude-phone"
+app_path="${APP_PATH:-/Applications/CodeAfar.app}"
+process_name="codeafar"
 
 menu_click() {
   local item="$1"
   osascript <<APPLESCRIPT
 tell application "System Events"
   tell process "${process_name}"
-    click menu bar item "CP" of menu bar 1
+    click menu bar item "CA" of menu bar 1
     delay 0.2
-    click menu item "${item}" of menu 1 of menu bar item "CP" of menu bar 1
+    click menu item "${item}" of menu 1 of menu bar item "CA" of menu bar 1
   end tell
 end tell
 APPLESCRIPT
@@ -22,7 +22,7 @@ window_count() {
 }
 
 menu_ready() {
-  osascript -e "tell application \"System Events\" to tell process \"${process_name}\" to exists menu bar item \"CP\" of menu bar 1" 2>/dev/null
+  osascript -e "tell application \"System Events\" to tell process \"${process_name}\" to exists menu bar item \"CA\" of menu bar 1" 2>/dev/null
 }
 
 open "${app_path}"

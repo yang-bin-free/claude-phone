@@ -29,7 +29,7 @@ final class TunnelEngineBridge {
             let directory = root.appending(path: "tailscale", directoryHint: .isDirectory); try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true); configuration.set(directory.path, for: SharedKey.stateDirectory)
 #if canImport(ClaudeCore)
             let adapter = PacketFlowAdapter(flow: packetFlow, provider: provider); var error: NSError?
-            engine = IoslibStart(directory.path, "claude-phone-ios", authKey, controlURL, adapter, &error)
+            engine = IoslibStart(directory.path, "codeafar-ios", authKey, controlURL, adapter, &error)
             if let error { throw error }
             state = "connected"; configuration.set(state, for: SharedKey.tunnelState); completion(.success(()))
 #else

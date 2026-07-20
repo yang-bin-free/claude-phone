@@ -3,11 +3,11 @@
 <plist version="1.0">
 <dict>
   <key>CFBundleDevelopmentRegion</key><string>zh_CN</string>
-  <key>CFBundleExecutable</key><string>claude-phone</string>
-  <key>CFBundleIdentifier</key><string>com.claudephone.mac</string>
+  <key>CFBundleExecutable</key><string>codeafar</string>
+  <key>CFBundleIdentifier</key><string>com.codeafar.mac</string>
   <key>CFBundleInfoDictionaryVersion</key><string>6.0</string>
-  <key>CFBundleName</key><string>Claude Phone</string>
-  <key>CFBundleDisplayName</key><string>Claude Phone</string>
+  <key>CFBundleName</key><string>CodeAfar</string>
+  <key>CFBundleDisplayName</key><string>CodeAfar</string>
   <key>CFBundlePackageType</key><string>APPL</string>
   <key>CFBundleIconFile</key><string>AppIcon</string>
   <key>CFBundleShortVersionString</key><string>__VERSION__</string>

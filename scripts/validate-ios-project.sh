@@ -53,7 +53,7 @@ if [[ -n "${swiftc_bin}" ]]; then
   while IFS= read -r source; do "${swiftc_bin}" -parse "${source}"; done < <(find ios -name '*.swift' -type f | sort)
 fi
 if [[ -x /Library/Developer/CommandLineTools/usr/bin/swiftc ]]; then
-  swift_cache="${TMPDIR:-/tmp}/claude-phone-swift-cache"
+  swift_cache="${TMPDIR:-/tmp}/codeafar-swift-cache"
   mkdir -p "${swift_cache}"
   core_sources="$(find ios/Shared ios/ClaudePhone/Networking ios/ClaudePhone/Stores ios/ClaudePhone/Speech -name '*.swift' -type f | sort)"
   DEVELOPER_DIR=/Library/Developer/CommandLineTools CLANG_MODULE_CACHE_PATH="${swift_cache}" SWIFT_MODULE_CACHE_PATH="${swift_cache}" \

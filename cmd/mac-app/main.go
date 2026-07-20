@@ -22,12 +22,12 @@ func main() {
 		runAutostart(os.Args[2:])
 		return
 	}
-	fs := flag.NewFlagSet("claude-phone", flag.ExitOnError)
+	fs := flag.NewFlagSet("codeafar", flag.ExitOnError)
 	desktopAddr := fs.String("desktop-addr", "127.0.0.1:9877", "loopback desktop listen address")
 	claudeBin := fs.String("claude-bin", "claude", "Claude CLI binary")
 	workdir := fs.String("workdir", ".", "default Claude working directory")
 	permission := fs.String("permission", "default", "default Claude permission mode")
-	dataDir := fs.String("data-dir", "", "Claude Phone configuration directory")
+	dataDir := fs.String("data-dir", "", "CodeAfar configuration directory")
 	_ = fs.Parse(os.Args[1:])
 
 	if err := validateDesktopAddr(*desktopAddr); err != nil {
@@ -52,7 +52,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	log.Printf("Claude Phone desktop service listening on %s", app.BaseURL())
+	log.Printf("CodeAfar desktop service listening on %s", app.BaseURL())
 	commands := newNativeCommands(app, stop)
 	if err := desktop.RunNative(ctx, pageURL, commands); err != nil {
 		stop()
@@ -110,7 +110,7 @@ func runAutostart(args []string) {
 			fmt.Println("disabled")
 		}
 	default:
-		log.Fatal("usage: claude-phone autostart install|uninstall|status")
+		log.Fatal("usage: codeafar autostart install|uninstall|status")
 	}
 }
 

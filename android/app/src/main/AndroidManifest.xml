@@ -8,7 +8,7 @@
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
 
     <application
-        android:label="Claude Phone"
+        android:label="CodeAfar"
         android:usesCleartextTraffic="true"
         android:theme="@android:style/Theme.Material.Light">
         <activity
@@ -28,7 +28,7 @@
             android:exported="false">
             <property
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
-                android:value="Maintains the user-authorized Claude Phone VPN and tailnet connection" />
+                android:value="Maintains the user-authorized CodeAfar VPN and tailnet connection" />
             <intent-filter>
                 <action android:name="android.net.VpnService" />
             </intent-filter>

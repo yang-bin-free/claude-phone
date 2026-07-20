@@ -1,4 +1,4 @@
-# Claude Phone for iOS
+# CodeAfar for iOS
 
 The iOS client targets iOS 18 and mirrors the Android business flow with native SwiftUI:
 pairing, embedded Tailscale, sessions, projects, permission modes, templates, history,

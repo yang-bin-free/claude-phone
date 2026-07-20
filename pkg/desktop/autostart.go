@@ -5,7 +5,7 @@ import (
 	"encoding/xml"
 )
 
-const LaunchAgentLabel = "com.claude.phone"
+const LaunchAgentLabel = "com.codeafar.mac"
 
 func launchAgentXML(executable string, args []string) ([]byte, error) {
 	var out bytes.Buffer

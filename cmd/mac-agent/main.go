@@ -43,7 +43,7 @@ func runServe(args []string) {
 
 	e := engine.New(cfg)
 	if network.Enabled() {
-		log.Printf("claude-phone-agent joining tailnet as %s and listening on %s", network.Hostname, cfg.Addr)
+		log.Printf("codeafar-agent joining tailnet as %s and listening on %s", network.Hostname, cfg.Addr)
 		if err := e.ServeTSNet(engine.TSNetConfig{
 			Hostname:   network.Hostname,
 			Dir:        network.Dir,
@@ -55,7 +55,7 @@ func runServe(args []string) {
 		return
 	}
 
-	log.Printf("claude-phone-agent listening locally on %s", cfg.Addr)
+	log.Printf("codeafar-agent listening locally on %s", cfg.Addr)
 	if err := e.ListenAndServe(); err != nil {
 		log.Fatal(err)
 	}
@@ -71,12 +71,12 @@ type tsnetOptions struct {
 func (o tsnetOptions) Enabled() bool { return o.Dir != "" }
 
 func parseServeConfig(args []string) (engine.Config, tsnetOptions, error) {
-	fs := flag.NewFlagSet("claude-phone-agent", flag.ContinueOnError)
+	fs := flag.NewFlagSet("codeafar-agent", flag.ContinueOnError)
 	addr := fs.String("addr", engine.DefaultAddr, "HTTP/WebSocket listen address")
 	claudeBin := fs.String("claude-bin", "claude", "Claude CLI binary")
 	workdir := fs.String("workdir", ".", "default Claude working directory")
 	permission := fs.String("permission", "default", "default Claude permission mode")
-	dataDir := fs.String("data-dir", "", "Claude Phone configuration directory")
+	dataDir := fs.String("data-dir", "", "CodeAfar configuration directory")
 	tsnetDir := fs.String("tsnet-dir", "", "persistent tsnet state directory (enables tailnet listener)")
 	tsnetHostname := fs.String("tsnet-hostname", "claude-mac", "tailnet hostname")
 	tsnetAuthKey := fs.String("tsnet-auth-key", os.Getenv("TS_AUTHKEY"), "Tailscale auth key (or TS_AUTHKEY)")
@@ -127,7 +127,7 @@ func runStatus(args []string) {
 
 func runKey(args []string) {
 	fs := flag.NewFlagSet("key", flag.ExitOnError)
-	dataDir := fs.String("data-dir", "", "Claude Phone configuration directory")
+	dataDir := fs.String("data-dir", "", "CodeAfar configuration directory")
 	name := fs.String("name", "Android", "device display name")
 	_ = fs.Parse(args)
 

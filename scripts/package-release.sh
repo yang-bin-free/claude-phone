@@ -9,19 +9,19 @@ mkdir -p "${release_dir}"
 
 VERSION="${version}" ./scripts/build-mac-app.sh
 make verify-mac-app
-ditto -c -k --sequesterRsrc --keepParent "build/Claude Phone.app" "${release_dir}/claude-phone-macos-${version}.zip"
+ditto -c -k --sequesterRsrc --keepParent "build/CodeAfar.app" "${release_dir}/codeafar-macos-${version}.zip"
 
 if [[ "${MAC_ONLY:-0}" != "1" ]]; then
   apk="android/app/build/outputs/apk/debug/app-debug.apk"
   if [[ -f "${apk}" ]]; then
-    cp "${apk}" "${release_dir}/claude-phone-android-${version}.apk"
+    cp "${apk}" "${release_dir}/codeafar-android-${version}.apk"
   else
     echo "Android APK not found; run 'make android-apk' before packaging." >&2
   fi
 
   ipa="build/ios/ClaudePhone.ipa"
   if [[ -f "${ipa}" ]]; then
-    cp "${ipa}" "${release_dir}/claude-phone-ios-${version}.ipa"
+    cp "${ipa}" "${release_dir}/codeafar-ios-${version}.ipa"
   else
     echo "iOS IPA not found; export build/ios/ClaudePhone.ipa from signed Xcode archive to include it." >&2
   fi

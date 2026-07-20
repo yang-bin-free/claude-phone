@@ -35,9 +35,9 @@ final class TunnelController: TunnelControlling {
         let manager = managers.first(where: { ($0.protocolConfiguration as? NETunnelProviderProtocol)?.providerBundleIdentifier == tunnelBundleIdentifier }) ?? NETunnelProviderManager()
         let configuration = NETunnelProviderProtocol()
         configuration.providerBundleIdentifier = tunnelBundleIdentifier
-        configuration.serverAddress = "Claude Phone Tailnet"
+        configuration.serverAddress = "CodeAfar Tailnet"
         manager.protocolConfiguration = configuration
-        manager.localizedDescription = "Claude Phone"
+        manager.localizedDescription = "CodeAfar"
         manager.isEnabled = true
         try await manager.saveToPreferences()
         try await manager.loadFromPreferences()

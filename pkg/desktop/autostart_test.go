@@ -6,12 +6,12 @@ import (
 )
 
 func TestLaunchAgentXMLEscapesExecutableAndArguments(t *testing.T) {
-	b, err := launchAgentXML("/Applications/Claude & Phone.app/run", []string{"--data-dir", "/tmp/a<b"})
+	b, err := launchAgentXML("/Applications/CodeAfar & Test.app/run", []string{"--data-dir", "/tmp/a<b"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	text := string(b)
-	for _, want := range []string{LaunchAgentLabel, "/Applications/Claude &amp; Phone.app/run", "/tmp/a&lt;b", "<key>RunAtLoad</key><true/>"} {
+	for _, want := range []string{LaunchAgentLabel, "/Applications/CodeAfar &amp; Test.app/run", "/tmp/a&lt;b", "<key>RunAtLoad</key><true/>"} {
 		if !strings.Contains(text, want) {
 			t.Fatalf("plist missing %q: %s", want, text)
 		}
@@ -19,7 +19,7 @@ func TestLaunchAgentXMLEscapesExecutableAndArguments(t *testing.T) {
 }
 
 func TestLaunchAgentXMLUsesLaunchdCompatibleBooleanElements(t *testing.T) {
-	b, err := launchAgentXML("/Applications/Claude Phone.app/run", nil)
+	b, err := launchAgentXML("/Applications/CodeAfar.app/run", nil)
 	if err != nil {
 		t.Fatal(err)
 	}

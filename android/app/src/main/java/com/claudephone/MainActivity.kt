@@ -45,7 +45,7 @@ class MainActivity : Activity() {
             setBackgroundColor(Color.rgb(17, 19, 24))
         }
         container.addView(TextView(this).apply {
-            text = "Claude Phone"
+            text = "CodeAfar"
             textSize = 28f
             setTextColor(Color.WHITE)
         })
@@ -75,7 +75,7 @@ class MainActivity : Activity() {
                     return@setOnClickListener
                 }
                 if (deviceToken.text.toString().trim().isEmpty()) {
-                    deviceToken.error = "请在 Mac 端运行 claude-phone-agent key 生成"
+                    deviceToken.error = "请在 Mac 端运行 codeafar-agent key 生成"
                     return@setOnClickListener
                 }
                 prefs.edit()
@@ -123,7 +123,7 @@ class MainActivity : Activity() {
     private fun startVpnAndOpenChat() {
         val prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
         val serviceIntent = Intent(this, IPNServiceImpl::class.java).apply {
-            putExtra(IPNServiceImpl.EXTRA_HOSTNAME, "claude-phone-android")
+            putExtra(IPNServiceImpl.EXTRA_HOSTNAME, "codeafar-android")
             putExtra(IPNServiceImpl.EXTRA_AUTH_KEY, authKey.text.toString().trim())
             putExtra(IPNServiceImpl.EXTRA_CONTROL_URL, controlUrl.text.toString().trim())
         }

@@ -7,21 +7,21 @@ test-race:
 	go test -race ./pkg/engine
 
 build-mac:
-	go build -o build/claude-phone ./cmd/mac-app
+	go build -o build/codeafar ./cmd/mac-app
 
 build-agent:
-	go build -o build/claude-phone-agent ./cmd/mac-agent
+	go build -o build/codeafar-agent ./cmd/mac-agent
 
 mac-app:
 	./scripts/build-mac-app.sh
 
 verify-mac-app:
 	@set -eu; \
-	app="build/Claude Phone.app"; \
-	test -x "$$app/Contents/MacOS/claude-phone"; \
+	app="build/CodeAfar.app"; \
+	test -x "$$app/Contents/MacOS/codeafar"; \
 	test -f "$$app/Contents/Resources/AppIcon.icns"; \
 	for file in LICENSE NOTICE THIRD_PARTY_LICENSES.md; do test -f "$$app/Contents/Resources/$$file"; done; \
-	test "$$(plutil -extract CFBundleIdentifier raw "$$app/Contents/Info.plist")" = "com.claudephone.mac"; \
+	test "$$(plutil -extract CFBundleIdentifier raw "$$app/Contents/Info.plist")" = "com.codeafar.mac"; \
 	test "$$(plutil -extract CFBundleIconFile raw "$$app/Contents/Info.plist")" = "AppIcon"; \
 	test "$$(plutil -extract LSMinimumSystemVersion raw "$$app/Contents/Info.plist")" = "12.0"; \
 	plutil -extract CFBundleShortVersionString raw "$$app/Contents/Info.plist" | grep -Eq '^[0-9A-Za-z][0-9A-Za-z.-]*$$'; \

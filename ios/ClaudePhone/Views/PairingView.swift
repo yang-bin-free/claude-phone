@@ -13,7 +13,7 @@ struct PairingView: View {
                 }
                 if let error = store.errorMessage { Section { Text(error).foregroundStyle(.red) } }
                 Button("连接并打开聊天") { Task { await store.connect() } }.buttonStyle(.borderedProminent)
-            }.navigationTitle("Claude Phone")
+            }.navigationTitle("CodeAfar")
         }
     }
 }

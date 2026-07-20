@@ -34,7 +34,7 @@ class IPNServiceImpl : VpnService(), IPNService {
         super.onCreate()
         val manager = getSystemService(NotificationManager::class.java)
         manager.createNotificationChannel(
-            NotificationChannel(NOTIFICATION_CHANNEL, "Claude Phone VPN", NotificationManager.IMPORTANCE_LOW)
+            NotificationChannel(NOTIFICATION_CHANNEL, "CodeAfar VPN", NotificationManager.IMPORTANCE_LOW)
         )
         startForeground(NOTIFICATION_ID, notification("正在连接 Mac…"))
     }
@@ -42,7 +42,7 @@ class IPNServiceImpl : VpnService(), IPNService {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (backend == null) {
             val stateDir = filesDir.resolve("tailscale").apply { mkdirs() }
-            val hostname = intent?.getStringExtra(EXTRA_HOSTNAME) ?: "claude-phone"
+            val hostname = intent?.getStringExtra(EXTRA_HOSTNAME) ?: "codeafar"
             val authKey = intent?.getStringExtra(EXTRA_AUTH_KEY) ?: ""
             val controlUrl = intent?.getStringExtra(EXTRA_CONTROL_URL) ?: ""
             backend = Tailscale.startEngineWithConfig(
@@ -97,7 +97,7 @@ class IPNServiceImpl : VpnService(), IPNService {
         )
         return Notification.Builder(this, NOTIFICATION_CHANNEL)
             .setSmallIcon(android.R.drawable.stat_sys_upload_done)
-            .setContentTitle("Claude Phone")
+            .setContentTitle("CodeAfar")
             .setContentText(status)
             .setContentIntent(openApp)
             .setOngoing(true)

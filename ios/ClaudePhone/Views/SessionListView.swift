@@ -12,7 +12,7 @@ struct SessionListView: View {
                 }.simultaneousGesture(TapGesture().onEnded { app.sessions.select(session) })
             }
             .overlay { if app.sessions.sessions.isEmpty { ContentUnavailableView("暂无会话", systemImage: "bubble.left.and.bubble.right", description: Text("新建会话后即可从 iPhone 使用 Claude")) } }
-            .navigationTitle("Claude Phone")
+            .navigationTitle("CodeAfar")
             .toolbar { ToolbarItemGroup(placement: .topBarTrailing) { Button { showingNew = true } label: { Image(systemName: "plus") }; Button { showingSettings = true } label: { Image(systemName: "gear") } } }
             .sheet(isPresented: $showingNew) { NewSessionView(store: app.sessions) }
             .sheet(isPresented: $showingSettings) { SettingsView(app: app) }

@@ -14,5 +14,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "claude-phone"
+rootProject.name = "CodeAfar"
 include(":app")
