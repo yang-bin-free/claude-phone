@@ -89,3 +89,39 @@ char *caChooseDirectory(void) {
     });
     return result;
 }
+
+static NSPasteboard *cpPasteboard(const char *name) {
+    if (name == NULL || name[0] == '\0') {
+        return [NSPasteboard generalPasteboard];
+    }
+    NSString *pasteboardName = [NSString stringWithUTF8String:name];
+    return [NSPasteboard pasteboardWithName:pasteboardName];
+}
+
+int caCopyTextToPasteboard(const char *text, const char *name) {
+    @autoreleasepool {
+        NSString *value = text == NULL ? @"" : [NSString stringWithUTF8String:text];
+        if (value == nil) {
+            return 0;
+        }
+        NSPasteboard *pasteboard = cpPasteboard(name);
+        [pasteboard clearContents];
+        return [pasteboard setString:value forType:NSPasteboardTypeString] ? 1 : 0;
+    }
+}
+
+char *caReadTextFromPasteboard(const char *name) {
+    @autoreleasepool {
+        NSString *value = [cpPasteboard(name) stringForType:NSPasteboardTypeString];
+        return value == nil ? NULL : strdup(value.UTF8String);
+    }
+}
+
+void caReleasePasteboard(const char *name) {
+    @autoreleasepool {
+        if (name == NULL || name[0] == '\0') {
+            return;
+        }
+        [cpPasteboard(name) releaseGlobally];
+    }
+}

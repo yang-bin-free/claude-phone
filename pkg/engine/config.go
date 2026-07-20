@@ -20,6 +20,7 @@ type Config struct {
 	MaxConcurrentSession int
 	WriteTimeout         time.Duration
 	DeviceTokens         map[string]string
+	DesktopDeviceToken   string
 	DataDir              string
 	ConfigPollInterval   time.Duration
 	HealthPollInterval   time.Duration

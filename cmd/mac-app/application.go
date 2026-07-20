@@ -129,14 +129,16 @@ func (a *application) Resume() error {
 		a.emitMenuState()
 		return err
 	}
+	desktopDeviceToken := "desktop-" + a.cfg.AdminToken
 	instance := a.deps.newEngine(engine.Config{
-		Addr:              a.cfg.DesktopAddr,
-		ClaudeBin:         bin,
-		ClaudeVersion:     version,
-		DefaultWorkingDir: a.cfg.DefaultWorkdir,
-		DefaultPermission: a.cfg.DefaultPermission,
-		DataDir:           a.cfg.DataDir,
-		DeviceTokens:      map[string]string{"desktop-" + a.cfg.AdminToken: "Mac"},
+		Addr:               a.cfg.DesktopAddr,
+		ClaudeBin:          bin,
+		ClaudeVersion:      version,
+		DefaultWorkingDir:  a.cfg.DefaultWorkdir,
+		DefaultPermission:  a.cfg.DefaultPermission,
+		DataDir:            a.cfg.DataDir,
+		DeviceTokens:       map[string]string{desktopDeviceToken: "Mac"},
+		DesktopDeviceToken: desktopDeviceToken,
 	})
 	a.mu.Lock()
 	a.engine = instance

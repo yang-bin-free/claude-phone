@@ -20,6 +20,10 @@
   const permissionSelect = document.querySelector("#draft-permission");
   const sessionContext = document.querySelector("#session-context");
   const draftStatus = document.querySelector("#draft-status");
+  const confirmDialog = document.querySelector("#confirm-dialog");
+  const confirmMessage = document.querySelector("#confirm-message");
+  const confirmCancel = document.querySelector("#confirm-cancel");
+  const confirmAccept = document.querySelector("#confirm-accept");
   const sendButton = composer.querySelector("button.primary");
   const params = new URLSearchParams(location.search);
   const token = new URLSearchParams(location.hash.slice(1)).get("token") || "";
@@ -27,6 +31,7 @@
   const configuredWS = params.get("ws") || "";
   const deviceToken = params.get("deviceToken") || `${platform}-${token || "local"}`;
   const deviceName = params.get("deviceName") || (platform === "mobile" ? "Android" : "Mac");
+  let cancelActiveConfirmation = null;
   document.body.classList.add(platform);
 
   function newRequestID() {
@@ -50,6 +55,56 @@
   function showBanner(message) {
     banner.textContent = message || "";
     banner.hidden = !message;
+  }
+
+  function requestConfirmation(message) {
+    cancelActiveConfirmation?.();
+    confirmMessage.textContent = message;
+    confirmDialog.returnValue = "cancel";
+    return new Promise(resolve => {
+      let settled = false;
+      const finish = confirmed => {
+        if (settled) return;
+        settled = true;
+        confirmCancel.removeEventListener("click", cancel);
+        confirmAccept.removeEventListener("click", accept);
+        confirmDialog.removeEventListener("cancel", cancel);
+        confirmDialog.removeEventListener("click", clickBackdrop);
+        document.removeEventListener("keydown", handleConfirmationKeys, true);
+        if (typeof confirmDialog.close === "function") confirmDialog.close(confirmed ? "confirm" : "cancel");
+        else confirmDialog.removeAttribute("open");
+        confirmDialog.classList.remove("fallback");
+        if (cancelActiveConfirmation === cancelActive) cancelActiveConfirmation = null;
+        resolve(confirmed);
+      };
+      const cancel = event => { event?.preventDefault(); finish(false); };
+      const accept = () => finish(true);
+      const cancelActive = () => finish(false);
+      const clickBackdrop = event => { if (event.target === confirmDialog) cancel(event); };
+      const handleConfirmationKeys = event => {
+        if (event.key === "Escape") return cancel(event);
+        if (event.key !== "Tab") return;
+        if (event.shiftKey && document.activeElement === confirmCancel) {
+          event.preventDefault();
+          confirmAccept.focus();
+        } else if (!event.shiftKey && document.activeElement === confirmAccept) {
+          event.preventDefault();
+          confirmCancel.focus();
+        }
+      };
+      cancelActiveConfirmation = cancelActive;
+      confirmCancel.addEventListener("click", cancel);
+      confirmAccept.addEventListener("click", accept);
+      confirmDialog.addEventListener("cancel", cancel);
+      confirmDialog.addEventListener("click", clickBackdrop);
+      document.addEventListener("keydown", handleConfirmationKeys, true);
+      if (typeof confirmDialog.showModal === "function") confirmDialog.showModal();
+      else {
+        confirmDialog.classList.add("fallback");
+        confirmDialog.setAttribute("open", "");
+      }
+      confirmCancel.focus();
+    });
   }
 
   function currentProvider() {
@@ -91,7 +146,7 @@
 
   async function showAdmin() {
     if (platform === "mobile") return;
-    if (isDraft() && prompt.value.trim() && !window.confirm("当前新会话草稿尚未发送，确认离开？")) return;
+    if (isDraft() && prompt.value.trim() && !await requestConfirmation("当前新会话草稿尚未发送，确认离开？")) return;
     chat.hidden = true;
     admin.hidden = false;
     document.body.classList.toggle("admin-mode", true);
@@ -108,6 +163,7 @@
     state,
     showChat,
     showAdmin,
+    requestConfirmation,
     setPrompt(value) { prompt.value = value || ""; prompt.dispatchEvent(new Event("input")); prompt.focus(); },
     setVoiceText(value) {
       const separator = state.voiceBase && value && !/\s$/.test(state.voiceBase) ? " " : "";
@@ -140,6 +196,13 @@
   }
 
   async function writeClipboard(text) {
+    if (window.codeAfarNative?.copyText) {
+      try {
+        if (await window.codeAfarNative.copyText(text)) return;
+      } catch (_) {
+        // Fall through when the native bridge is unavailable.
+      }
+    }
     if (navigator.clipboard?.writeText) {
       try {
         await navigator.clipboard.writeText(text);
@@ -253,7 +316,7 @@
     providerSelect.hidden = Boolean(only);
     providerLabel.hidden = !only;
     providerLabel.textContent = only?.name || "";
-    renderPermissions();
+    renderPermissions(isDraft() ? state.draft.permissionMode : state.selectedSession?.permissionMode);
   }
 
   async function chooseProjectDirectory() {
@@ -281,12 +344,13 @@
     }
   }
 
-  function beginDraft() {
-    if (isDraft() && prompt.value.trim() && !window.confirm("当前新会话草稿尚未发送，确认丢弃？")) return;
+  async function beginDraft() {
+    if (isDraft() && prompt.value.trim() && !await requestConfirmation("当前新会话草稿尚未发送，确认丢弃？")) return;
     state.sessionId = "";
     state.sessionReady = false;
     state.selectedSession = null;
-    state.draft = { status: "draft", requestId: newRequestID(), firstPrompt: "" };
+    state.draft = { status: "draft", requestId: newRequestID(), firstPrompt: "", permissionMode: "default" };
+    state.pendingPermission = null;
     prompt.value = "";
     prompt.placeholder = "告诉 CodeAfar 要做什么…";
     projectSelect.hidden = false;
@@ -298,15 +362,17 @@
     document.querySelector("#view-title").textContent = "新会话";
     document.querySelector("#stop-session").disabled = true;
     resetStream();
+    renderPermissions(state.draft.permissionMode);
     renderDraftEmpty();
     renderSessions();
     showChat();
     updateControls();
   }
 
-  function selectSession(sessionId, name) {
-    if (isDraft() && prompt.value.trim() && !window.confirm("当前新会话草稿尚未发送，确认离开？")) return;
+  async function selectSession(sessionId, name) {
+    if (isDraft() && prompt.value.trim() && !await requestConfirmation("当前新会话草稿尚未发送，确认离开？")) return;
     state.draft = null;
+    if (state.pendingPermission?.sessionId !== sessionId) state.pendingPermission = null;
     state.sessionId = sessionId;
     state.selectedSession = state.sessions.find(item => item.sessionId === sessionId) || null;
     state.sessionReady = false;
@@ -369,7 +435,7 @@
     return send({
       type: "control", action: "create_session", name: sessionNameFor(state.draft.firstPrompt, projectSelect.value),
       workingDir: projectSelect.value, provider: providerSelect.value || "claude",
-      permissionMode: permissionSelect.value, requestId: state.draft.requestId
+      permissionMode: state.draft.permissionMode, requestId: state.draft.requestId
     });
   }
 
@@ -432,12 +498,26 @@
           send({ type: "control", action: "select_session", sessionId: state.sessionId });
           send({ type: "control", action: "load_history", sessionId: state.sessionId, limit: 500 });
           deliverPendingFirstPrompt();
+          if (state.pendingPermission?.sessionId === state.sessionId) {
+            draftStatus.textContent = "正在确认权限…";
+            send({
+              type: "control", action: "set_permission_mode", sessionId: state.sessionId,
+              permissionMode: state.pendingPermission.requested
+            });
+          }
         } else if (state.draft?.status === "creating") {
           sendCreateRequest();
         }
         break;
       case "session_list":
         state.sessions = msg.sessions || [];
+        if (state.sessionId) {
+          const selected = state.sessions.find(item => item.sessionId === state.sessionId);
+          if (selected) {
+            state.selectedSession = { ...state.selectedSession, ...selected };
+            if (!state.pendingPermission) permissionSelect.value = selected.permissionMode || "default";
+          }
+        }
         renderSessions();
         break;
       case "session_created": {
@@ -601,6 +681,7 @@
       connection.textContent = "重新连接中";
       document.querySelector("#status-dot").classList.remove("online");
       setComposerEnabled(false);
+      if (state.pendingPermission?.sessionId === state.sessionId) draftStatus.textContent = "连接中断，重连后将确认权限";
       scheduleReconnect(generation);
     };
     ws.onerror = () => {
@@ -642,9 +723,10 @@
     const session = state.sessions.find(item => item.sessionId === event.target.value);
     if (session) selectSession(session.sessionId, session.name);
   });
-  document.querySelector("#stop-session").addEventListener("click", () => {
-    if (state.sessionId && window.confirm("确认停止当前会话？未完成的输出会中断。")) {
-      send({ type: "control", action: "stop_session", sessionId: state.sessionId });
+  document.querySelector("#stop-session").addEventListener("click", async () => {
+    const sessionId = state.sessionId;
+    if (sessionId && await requestConfirmation("确认停止当前会话？未完成的输出会中断。") && !isDraft() && state.sessionId === sessionId) {
+      send({ type: "control", action: "stop_session", sessionId });
     }
   });
   document.querySelector("#open-settings").addEventListener("click", () => {
@@ -659,19 +741,34 @@
     if (projectSelect.value === "__choose__") chooseProjectDirectory();
     else updateControls();
   });
-  providerSelect.addEventListener("change", () => renderPermissions());
-  permissionSelect.addEventListener("change", () => {
-    const option = currentProvider()?.permissions?.find(item => item.id === permissionSelect.value);
-    if (option?.dangerous && !window.confirm("完全访问会跳过常规权限限制。只应在隔离环境或完全信任的目录中使用，确认继续？")) {
-      permissionSelect.value = state.selectedSession?.permissionMode || "default";
+  providerSelect.addEventListener("change", () => {
+    if (isDraft()) state.draft.permissionMode = "default";
+    renderPermissions(isDraft() ? state.draft.permissionMode : "");
+  });
+  permissionSelect.addEventListener("change", async () => {
+    const draft = state.draft;
+    const sessionId = state.sessionId;
+    const requested = permissionSelect.value;
+    const confirmed = draft ? draft.permissionMode : (state.selectedSession?.permissionMode || "default");
+    const option = currentProvider()?.permissions?.find(item => item.id === requested);
+    const approved = !option?.dangerous || await requestConfirmation("完全访问会跳过常规权限限制。只应在隔离环境或完全信任的目录中使用，确认继续？");
+    const contextMatches = draft ? state.draft === draft : (!isDraft() && state.sessionId === sessionId);
+    if (!contextMatches) return;
+    if (!approved) {
+      permissionSelect.value = confirmed;
+      updateControls();
       return;
     }
-    if (!isDraft() && state.sessionId) {
-      const requested = permissionSelect.value;
-      const confirmed = state.selectedSession?.permissionMode || "default";
-      state.pendingPermission = { requested, confirmed };
+    if (draft) {
+      draft.permissionMode = requested;
+      updateControls();
+      return;
+    }
+    if (sessionId) {
+      state.pendingPermission = { sessionId, requested, confirmed };
       permissionSelect.value = confirmed;
-      if (!send({ type: "control", action: "set_permission_mode", sessionId: state.sessionId, permissionMode: requested })) {
+      draftStatus.textContent = "正在切换权限…";
+      if (!send({ type: "control", action: "set_permission_mode", sessionId, permissionMode: requested })) {
         state.pendingPermission = null;
         draftStatus.textContent = "连接中断，权限未更改";
       }
@@ -711,6 +808,10 @@
     }
   });
   document.addEventListener("keydown", event => {
+    if (cancelActiveConfirmation !== null) {
+      if (event.metaKey) event.preventDefault();
+      return;
+    }
     if (!event.metaKey) return;
     if (event.key.toLowerCase() === "n") { event.preventDefault(); beginDraft(); }
     if (event.key === ",") { event.preventDefault(); showAdmin(); }

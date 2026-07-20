@@ -3,7 +3,9 @@
     Promise.resolve().then(action).catch(error => feedback(error.message, true));
   }
   function confirmDangerousAction(message, action) {
-    if (window.confirm(message)) run(action);
+    run(async () => {
+      if (await window.claudePhone.requestConfirmation(message)) await action();
+    });
   }
   async function refresh() {
     const token = window.claudePhone.adminToken;

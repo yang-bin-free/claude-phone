@@ -235,6 +235,63 @@ func TestWebSocket_PermissionChangeRestartsIdleSessionAndPersists(t *testing.T) 
 	}
 }
 
+func TestWebSocket_RotatedDesktopCredentialCanManageRestoredSession(t *testing.T) {
+	dataDir := t.TempDir()
+	restored := session.NewSession("restored", "Restored", t.TempDir(), "desktop-old-credential")
+	restored.SetPermission("default")
+	if err := newHistoryStore(dataDir).CreateSession(restored); err != nil {
+		t.Fatal(err)
+	}
+
+	e := New(Config{
+		DataDir: dataDir, DeviceTokens: map[string]string{"desktop-new-credential": "Mac"},
+		DesktopDeviceToken: "desktop-new-credential",
+	})
+	adapter := &recordingAdapter{id: provider.ClaudeID, permissions: []string{"default", "bypassPermissions"}}
+	e.SetProviderRegistry(provider.NewRegistry(adapter))
+	server, conn := openAuthenticatedEngine(t, e, "desktop-new-credential")
+	defer server.Close()
+	defer conn.Close()
+
+	writeJSON(t, conn, protocol.ControlMsg{Type: protocol.TypeControl, Action: protocol.ActionSelectSession, SessionID: restored.ID})
+	writeJSON(t, conn, protocol.ControlMsg{Type: protocol.TypeControl, Action: protocol.ActionSetPermission, SessionID: restored.ID, PermissionMode: "bypassPermissions"})
+	changed := readPermissionChanged(t, conn)
+	if changed.PermissionMode != "bypassPermissions" || changed.Pending {
+		t.Fatalf("changed=%+v", changed)
+	}
+	persisted, err := e.history.Restore()
+	if err != nil || len(persisted) != 1 || persisted[0].PermissionMode() != "bypassPermissions" {
+		t.Fatalf("persisted=%+v err=%v", persisted, err)
+	}
+}
+
+func TestWebSocket_NonOwnerDeviceCannotChangePermission(t *testing.T) {
+	dataDir := t.TempDir()
+	restored := session.NewSession("protected", "Protected", t.TempDir(), "desktop-old-credential")
+	restored.SetPermission("default")
+	if err := newHistoryStore(dataDir).CreateSession(restored); err != nil {
+		t.Fatal(err)
+	}
+	e := New(Config{
+		DataDir: dataDir,
+		DeviceTokens: map[string]string{
+			"desktop-current-credential": "Mac",
+			"desktop-attacker":           "Android",
+		},
+		DesktopDeviceToken: "desktop-current-credential",
+	})
+	adapter := &recordingAdapter{id: provider.ClaudeID, permissions: []string{"default", "bypassPermissions"}}
+	e.SetProviderRegistry(provider.NewRegistry(adapter))
+	server, guest := openAuthenticatedEngine(t, e, "desktop-attacker")
+	defer server.Close()
+	defer guest.Close()
+	writeJSON(t, guest, protocol.ControlMsg{Type: protocol.TypeControl, Action: protocol.ActionJoinSession, SessionID: restored.ID})
+	writeJSON(t, guest, protocol.ControlMsg{Type: protocol.TypeControl, Action: protocol.ActionSetPermission, SessionID: restored.ID, PermissionMode: "bypassPermissions"})
+	if got := readProtocolError(t, guest); got.Code != protocol.CodeSessionNotOwner {
+		t.Fatalf("error=%+v", got)
+	}
+}
+
 func TestWebSocket_TextRequestIsAcknowledgedAndDeduplicated(t *testing.T) {
 	e := New(Config{DataDir: t.TempDir(), DefaultWorkingDir: ".", DeviceTokens: map[string]string{"device": "Mac"}})
 	adapter := &recordingAdapter{id: provider.ClaudeID}

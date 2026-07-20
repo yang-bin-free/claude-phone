@@ -61,12 +61,14 @@ func TestApplicationKeepsDesktopAliveWhenClaudeIsUnavailable(t *testing.T) {
 
 func TestApplicationPauseAndResumeKeepsDesktopHandler(t *testing.T) {
 	created := make([]*fakeManagedEngine, 0, 2)
+	configs := make([]engine.Config, 0, 2)
 	app := newApplication(context.Background(), appConfig{DesktopAddr: "127.0.0.1:0", ClaudeBin: "claude", AdminToken: "token"}, appDependencies{
 		resolveClaude: func(string) (string, error) { return "/tmp/claude", nil },
 		detectVersion: func(string) (string, error) { return "1.2.3", nil },
-		newEngine: func(engine.Config) managedEngine {
+		newEngine: func(cfg engine.Config) managedEngine {
 			instance := &fakeManagedEngine{}
 			created = append(created, instance)
+			configs = append(configs, cfg)
 			return instance
 		},
 	})
@@ -76,6 +78,9 @@ func TestApplicationPauseAndResumeKeepsDesktopHandler(t *testing.T) {
 	t.Cleanup(func() { _ = app.Close() })
 	if !app.Status().Ready {
 		t.Fatalf("status=%+v", app.Status())
+	}
+	if len(configs) != 1 || configs[0].DesktopDeviceToken != "desktop-token" || configs[0].DeviceTokens["desktop-token"] != "Mac" {
+		t.Fatalf("desktop engine config=%+v", configs)
 	}
 	assertAppHTTPStatus(t, app.Handler(), "/ws", http.StatusSwitchingProtocols)
 
@@ -91,7 +96,7 @@ func TestApplicationPauseAndResumeKeepsDesktopHandler(t *testing.T) {
 	if err := app.Resume(); err != nil {
 		t.Fatal(err)
 	}
-	if len(created) != 2 || !app.Status().Ready {
+	if len(created) != 2 || len(configs) != 2 || configs[1].DesktopDeviceToken != "desktop-token" || !app.Status().Ready {
 		t.Fatalf("created=%d status=%+v", len(created), app.Status())
 	}
 }

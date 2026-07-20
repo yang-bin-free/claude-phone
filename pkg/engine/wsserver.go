@@ -19,6 +19,15 @@ var upgrader = websocket.Upgrader{
 	CheckOrigin: func(*http.Request) bool { return true },
 }
 
+const desktopDeviceTokenPrefix = "desktop-"
+
+func (e *Engine) sessionOwnerMatches(owner, deviceID string) bool {
+	if owner == deviceID {
+		return true
+	}
+	return e.cfg.DesktopDeviceToken != "" && deviceID == e.cfg.DesktopDeviceToken && strings.HasPrefix(owner, desktopDeviceTokenPrefix)
+}
+
 type client struct {
 	deviceID string
 	conn     *websocket.Conn
@@ -171,7 +180,7 @@ func (e *Engine) handleControl(cl *client, currentSession string, raw []byte) (s
 		if !ok {
 			return currentSession, session.ErrSessionNotFound
 		}
-		if s.Owner == cl.deviceID {
+		if e.sessionOwnerMatches(s.Owner, cl.deviceID) {
 			return currentSession, session.ErrSessionNotOwner
 		}
 		s.Unsubscribe(cl.deviceID)
@@ -184,7 +193,7 @@ func (e *Engine) handleControl(cl *client, currentSession string, raw []byte) (s
 		if !ok {
 			return currentSession, session.ErrSessionNotFound
 		}
-		if s.Owner != cl.deviceID {
+		if !e.sessionOwnerMatches(s.Owner, cl.deviceID) {
 			return currentSession, session.ErrSessionNotOwner
 		}
 		if err := e.stopSession(s); err != nil {
@@ -199,7 +208,7 @@ func (e *Engine) handleControl(cl *client, currentSession string, raw []byte) (s
 		if !ok {
 			return currentSession, session.ErrSessionNotFound
 		}
-		if s.Owner != cl.deviceID {
+		if !e.sessionOwnerMatches(s.Owner, cl.deviceID) {
 			return currentSession, session.ErrSessionNotOwner
 		}
 		return currentSession, e.requestPermissionChange(s, msg.PermissionMode)
@@ -250,7 +259,7 @@ func (e *Engine) handleControl(cl *client, currentSession string, raw []byte) (s
 		if !ok {
 			return currentSession, session.ErrSessionNotFound
 		}
-		if s.Owner != cl.deviceID {
+		if !e.sessionOwnerMatches(s.Owner, cl.deviceID) {
 			return currentSession, session.ErrSessionNotOwner
 		}
 		if err := e.stopSession(s); err != nil {

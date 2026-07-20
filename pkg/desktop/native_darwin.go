@@ -132,7 +132,10 @@ func runNative(ctx context.Context, pageURL string, commands Commands) error {
 	}); err != nil {
 		return err
 	}
-	window.Init(directoryPickerBootstrap)
+	if err := window.Bind(clipboardBinding, writeNativeClipboard); err != nil {
+		return err
+	}
+	window.Init(nativeBridgeBootstrap)
 	window.Navigate(pageURL)
 
 	go func() {
@@ -148,4 +151,36 @@ func runNative(ctx context.Context, pageURL string, commands Commands) error {
 	window.Run()
 	close(done)
 	return nil
+}
+
+func writeNativeClipboard(text string) bool {
+	return writeNativeClipboardToPasteboard(text, "")
+}
+
+func writeNativeClipboardToPasteboard(text, name string) bool {
+	value := C.CString(text)
+	defer C.free(unsafe.Pointer(value))
+	var pasteboardName *C.char
+	if name != "" {
+		pasteboardName = C.CString(name)
+		defer C.free(unsafe.Pointer(pasteboardName))
+	}
+	return C.caCopyTextToPasteboard(value, pasteboardName) == 1
+}
+
+func readNativeClipboardFromPasteboard(name string) (string, bool) {
+	pasteboardName := C.CString(name)
+	defer C.free(unsafe.Pointer(pasteboardName))
+	value := C.caReadTextFromPasteboard(pasteboardName)
+	if value == nil {
+		return "", false
+	}
+	defer C.free(unsafe.Pointer(value))
+	return C.GoString(value), true
+}
+
+func releaseNativePasteboard(name string) {
+	pasteboardName := C.CString(name)
+	defer C.free(unsafe.Pointer(pasteboardName))
+	C.caReleasePasteboard(pasteboardName)
 }

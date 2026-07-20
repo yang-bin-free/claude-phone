@@ -124,9 +124,10 @@ func TestDesktopMessagesAreSelectable(t *testing.T) {
 		t.Fatal(err)
 	}
 	css := string(cssBytes)
-	marker := ".message { position: relative; max-width: 78%; margin: 0 0 16px; padding: 12px 64px 12px 15px; border-radius: 14px; white-space: pre-wrap; user-select: text; cursor: text; }"
-	if !strings.Contains(css, marker) {
-		t.Fatalf("message selection rule missing %q", marker)
+	for _, marker := range []string{`.message {`, `-webkit-user-select: text`, `user-select: text`, `cursor: text`} {
+		if !strings.Contains(css, marker) {
+			t.Errorf("message selection rule missing %q", marker)
+		}
 	}
 }
 
@@ -140,6 +141,7 @@ func TestDesktopMessagesExposeCopyAction(t *testing.T) {
 		`button.className = "message-copy"`,
 		`button.setAttribute("aria-label", "复制消息")`,
 		`await writeClipboard(content.textContent)`,
+		`window.codeAfarNative?.copyText`,
 		`document.execCommand("copy")`,
 	} {
 		if !strings.Contains(js, marker) {
@@ -231,10 +233,94 @@ func TestChatScriptExposesCodeAfarBridgeWithLegacyAlias(t *testing.T) {
 
 func TestPermissionSelectorTracksOnlyConfirmedMode(t *testing.T) {
 	jsBytes, err := fs.ReadFile(Assets, "chat/chat.js")
-	if err != nil { t.Fatal(err) }
+	if err != nil {
+		t.Fatal(err)
+	}
 	js := string(jsBytes)
-	for _, marker := range []string{`pendingPermission`, `permissionSelect.value = state.selectedSession?.permissionMode`, `state.pendingPermission = null`} {
-		if !strings.Contains(js, marker) { t.Errorf("permission rollback missing %q", marker) }
+	for _, marker := range []string{
+		`permissionMode: "default"`, `draft.permissionMode = requested`,
+		`permissionSelect.value = confirmed`, `state.pendingPermission = { sessionId, requested, confirmed }`,
+		`state.pendingPermission?.sessionId === state.sessionId`, `permissionMode: state.pendingPermission.requested`,
+		`const draft = state.draft`, `const sessionId = state.sessionId`,
+		`const contextMatches = draft ? state.draft === draft`, `state.sessionId === sessionId`,
+		`state.pendingPermission = null`,
+	} {
+		if !strings.Contains(js, marker) {
+			t.Errorf("permission rollback missing %q", marker)
+		}
+	}
+}
+
+func TestDesktopChatPinsComposerAndKeepsMessagesSelectable(t *testing.T) {
+	cssBytes, err := fs.ReadFile(Assets, "chat/desktop.css")
+	if err != nil {
+		t.Fatal(err)
+	}
+	css := string(cssBytes)
+	for _, marker := range []string{
+		`body.desktop { height: 100vh; overflow: hidden; }`,
+		`.desktop .app-shell { height: 100vh; min-height: 0; overflow: hidden; }`,
+		`.desktop .workspace { height: 100vh; min-height: 0; overflow: hidden; }`,
+		`.desktop .chat-view { min-height: 0; overflow: hidden; }`,
+		`.desktop .messages { min-height: 0; overflow-y: auto; }`,
+		`-webkit-user-select: text`, `opacity: .55`,
+	} {
+		if !strings.Contains(css, marker) {
+			t.Errorf("desktop chat layout/copy affordance missing %q", marker)
+		}
+	}
+}
+
+func TestDangerousActionsUseInAppConfirmation(t *testing.T) {
+	htmlBytes, err := fs.ReadFile(Assets, "chat/index.html")
+	if err != nil {
+		t.Fatal(err)
+	}
+	jsBytes, err := fs.ReadFile(Assets, "chat/chat.js")
+	if err != nil {
+		t.Fatal(err)
+	}
+	adminBytes, err := fs.ReadFile(Assets, "admin/admin.js")
+	if err != nil {
+		t.Fatal(err)
+	}
+	html, js, admin := string(htmlBytes), string(jsBytes), string(adminBytes)
+	for _, marker := range []string{`id="confirm-dialog"`, `id="confirm-message"`, `value="confirm"`} {
+		if !strings.Contains(html, marker) {
+			t.Errorf("confirmation dialog missing %q", marker)
+		}
+	}
+	if !strings.Contains(js, `function requestConfirmation(message)`) || !strings.Contains(js, `await requestConfirmation(`) {
+		t.Error("dangerous actions do not use the in-app confirmation dialog")
+	}
+	if strings.Contains(js, "window.confirm(") {
+		t.Error("WKWebView-incompatible window.confirm remains")
+	}
+	if strings.Contains(admin, "window.confirm(") || !strings.Contains(admin, `window.claudePhone.requestConfirmation(message)`) {
+		t.Error("admin dangerous actions do not use the shared in-app confirmation dialog")
+	}
+	for _, marker := range []string{`confirmCancel.focus()`, `typeof confirmDialog.showModal`, `confirmDialog.classList.add("fallback")`} {
+		if !strings.Contains(js, marker) {
+			t.Errorf("confirmation compatibility behavior missing %q", marker)
+		}
+	}
+	cssBytes, err := fs.ReadFile(Assets, "chat/core.css")
+	if err != nil {
+		t.Fatal(err)
+	}
+	css := string(cssBytes)
+	for _, marker := range []string{`#confirm-dialog:not([open]) { display: none; }`, `width: 100vw; height: 100vh`, `#confirm-dialog.fallback .confirm-card`} {
+		if !strings.Contains(css, marker) {
+			t.Errorf("confirmation fallback missing %q", marker)
+		}
+	}
+	for _, marker := range []string{`event.key === "Escape"`, `event.key !== "Tab"`, `event.target === confirmDialog`} {
+		if !strings.Contains(js, marker) {
+			t.Errorf("confirmation keyboard/modal behavior missing %q", marker)
+		}
+	}
+	if !strings.Contains(js, `if (cancelActiveConfirmation !== null)`) || !strings.Contains(js, `if (event.metaKey) event.preventDefault()`) {
+		t.Error("global shortcuts are not blocked while confirmation is active")
 	}
 }
 

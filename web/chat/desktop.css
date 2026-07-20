@@ -1,4 +1,9 @@
 .app-shell { display: grid; grid-template-columns: 240px minmax(0, 1fr); min-height: 100vh; }
+body.desktop { height: 100vh; overflow: hidden; }
+.desktop .app-shell { height: 100vh; min-height: 0; overflow: hidden; }
+.desktop .workspace { height: 100vh; min-height: 0; overflow: hidden; }
+.desktop .chat-view { min-height: 0; overflow: hidden; }
+.desktop .messages { min-height: 0; overflow-y: auto; }
 .sidebar { background: var(--surface); border-right: 1px solid var(--border); padding: 18px 14px; display: flex; flex-direction: column; gap: 14px; }
 .brand { font-weight: 650; padding: 8px 4px 14px; }
 #session-list { flex: 1; }
@@ -15,10 +20,11 @@ header { border-bottom: 1px solid var(--border); display: flex; align-items: cen
 #connection-state { color: var(--muted); font-size: 13px; }
 .chat-view { min-height: 0; display: grid; grid-template-rows: minmax(0, 1fr) auto auto; }
 .messages { overflow: auto; padding: 28px max(28px, calc((100% - 820px) / 2)); }
-.message { position: relative; max-width: 78%; margin: 0 0 16px; padding: 12px 64px 12px 15px; border-radius: 14px; white-space: pre-wrap; user-select: text; cursor: text; }
+.message { position: relative; max-width: 78%; margin: 0 0 16px; padding: 12px 64px 12px 15px; border-radius: 14px; white-space: pre-wrap; -webkit-user-select: text; user-select: text; cursor: text; }
+.message-content { -webkit-user-select: text; user-select: text; }
 .message.user { margin-left: auto; background: #9e4f38; }
 .message.assistant { background: var(--surface-raised); }
-.message-copy { position: absolute; top: 8px; right: 8px; min-height: 26px; padding: 4px 8px; border-radius: 7px; background: #0004; color: inherit; font-size: 11px; line-height: 1; opacity: 0; user-select: none; cursor: pointer; transition: opacity 120ms ease; }
+.message-copy { position: absolute; top: 8px; right: 8px; min-height: 26px; padding: 4px 8px; border-radius: 7px; background: #0004; color: inherit; font-size: 11px; line-height: 1; opacity: .55; -webkit-user-select: none; user-select: none; cursor: pointer; transition: opacity 120ms ease; }
 .message:hover .message-copy, .message-copy:focus-visible { opacity: .8; }
 .message-copy:hover { opacity: 1; }
 .message-copy::before { content: "复制"; }

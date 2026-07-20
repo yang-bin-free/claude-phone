@@ -22,11 +22,14 @@ func TestURLWithAdminTokenUsesFragment(t *testing.T) {
 }
 
 func TestDirectoryPickerBootstrapExposesNarrowBridge(t *testing.T) {
-	if !strings.Contains(directoryPickerBootstrap, "window.codeAfarNative") || !strings.Contains(directoryPickerBootstrap, directoryPickerBinding) {
-		t.Fatalf("bootstrap=%q binding=%q", directoryPickerBootstrap, directoryPickerBinding)
+	if !strings.Contains(nativeBridgeBootstrap, "window.codeAfarNative") || !strings.Contains(nativeBridgeBootstrap, directoryPickerBinding) {
+		t.Fatalf("bootstrap=%q binding=%q", nativeBridgeBootstrap, directoryPickerBinding)
 	}
-	if strings.Contains(directoryPickerBootstrap, "fetch") {
-		t.Fatalf("native bridge should only expose directory selection: %q", directoryPickerBootstrap)
+	if !strings.Contains(nativeBridgeBootstrap, clipboardBinding) || !strings.Contains(nativeBridgeBootstrap, "copyText") {
+		t.Fatalf("native bridge does not expose clipboard copy: %q", nativeBridgeBootstrap)
+	}
+	if strings.Contains(nativeBridgeBootstrap, "fetch") {
+		t.Fatalf("native bridge must not expose network access: %q", nativeBridgeBootstrap)
 	}
 }
 

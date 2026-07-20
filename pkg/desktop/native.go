@@ -7,8 +7,9 @@ import (
 )
 
 const (
-	directoryPickerBinding   = "codeAfarChooseDirectory"
-	directoryPickerBootstrap = "window.codeAfarNative = Object.freeze({ chooseDirectory: () => window.codeAfarChooseDirectory() });"
+	directoryPickerBinding = "codeAfarChooseDirectory"
+	clipboardBinding       = "codeAfarCopyText"
+	nativeBridgeBootstrap  = "window.codeAfarNative = Object.freeze({ chooseDirectory: () => window.codeAfarChooseDirectory(), copyText: text => window.codeAfarCopyText(String(text ?? '')) });"
 )
 
 type Commands struct {
