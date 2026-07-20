@@ -8,70 +8,75 @@ import (
 	"sync"
 	"time"
 
+	"github.com/yang-bin-free/claude-phone/pkg/protocol"
+	"github.com/yang-bin-free/claude-phone/pkg/provider"
 	"github.com/yang-bin-free/claude-phone/pkg/session"
 )
 
-type claudeProc interface {
-	OnOutput(session.OutputFunc)
-	Start() error
-	Send(string) error
-	Stop() error
-}
+type claudeProc = provider.Process
 
 type ClaudeFactory func(session.ClaudeConfig) claudeProc
 
 type Engine struct {
 	cfg           Config
 	manager       *session.Manager
-	factory       ClaudeFactory
+	providers     *provider.Registry
 	sessionExists func(string, string) bool
 	server        *http.Server
 
-	mu          sync.RWMutex
-	resumeMu    sync.Mutex
-	clients     map[string]*client
-	procs       map[string]claudeProc
-	projects    *projectStore
-	devices     *deviceStore
-	history     *historyStore
-	permissions *permissionStore
-	templates   *templateStore
-	startedAt   time.Time
-	configMu    sync.RWMutex
-	runtime     runtimeConfig
-	stopWatch   chan struct{}
-	closeOnce   sync.Once
-	power       powerInhibitor
-	activity    map[string]time.Time
-	healthState map[string]string
-	queues      map[string][]queuedPrompt
-	busy        map[string]bool
-	queueSeq    uint64
+	mu             sync.RWMutex
+	resumeMu       sync.Mutex
+	createMu       sync.Mutex
+	clients        map[string]*client
+	procs          map[string]claudeProc
+	projects       *projectStore
+	devices        *deviceStore
+	history        *historyStore
+	permissions    *permissionStore
+	templates      *templateStore
+	startedAt      time.Time
+	configMu       sync.RWMutex
+	runtime        runtimeConfig
+	stopWatch      chan struct{}
+	closeOnce      sync.Once
+	power          powerInhibitor
+	activity       map[string]time.Time
+	healthState    map[string]string
+	queues         map[string][]queuedPrompt
+	busy           map[string]bool
+	queueSeq       uint64
+	createRequests map[string]createResult
+}
+
+type createResult struct {
+	message   protocol.SessionCreatedMsg
+	signature string
 }
 
 func New(cfg Config) *Engine {
 	cfg = cfg.withDefaults()
 	e := &Engine{
-		cfg:           cfg,
-		manager:       session.NewManager(session.ManagerConfig{MaxConcurrent: cfg.MaxConcurrentSession}),
-		clients:       map[string]*client{},
-		procs:         map[string]claudeProc{},
-		projects:      newProjectStore(cfg.DataDir),
-		devices:       newDeviceStore(cfg.DataDir),
-		history:       newHistoryStore(cfg.DataDir),
-		permissions:   newPermissionStore(cfg.DataDir),
-		templates:     newTemplateStore(cfg.DataDir),
-		startedAt:     time.Now(),
-		runtime:       runtimeConfig{DefaultWorkingDir: cfg.DefaultWorkingDir, DefaultPermission: cfg.DefaultPermission, MaxConcurrentSessions: cfg.MaxConcurrentSession},
-		sessionExists: session.ClaudeSessionExists,
-		stopWatch:     make(chan struct{}),
-		power:         newPowerInhibitor(),
-		activity:      map[string]time.Time{},
-		healthState:   map[string]string{},
-		queues:        map[string][]queuedPrompt{},
-		busy:          map[string]bool{},
+		cfg:            cfg,
+		manager:        session.NewManager(session.ManagerConfig{MaxConcurrent: cfg.MaxConcurrentSession}),
+		clients:        map[string]*client{},
+		procs:          map[string]claudeProc{},
+		projects:       newProjectStore(cfg.DataDir),
+		devices:        newDeviceStore(cfg.DataDir),
+		history:        newHistoryStore(cfg.DataDir),
+		permissions:    newPermissionStore(cfg.DataDir),
+		templates:      newTemplateStore(cfg.DataDir),
+		startedAt:      time.Now(),
+		runtime:        runtimeConfig{DefaultWorkingDir: cfg.DefaultWorkingDir, DefaultPermission: cfg.DefaultPermission, MaxConcurrentSessions: cfg.MaxConcurrentSession},
+		sessionExists:  session.ClaudeSessionExists,
+		stopWatch:      make(chan struct{}),
+		power:          newPowerInhibitor(),
+		activity:       map[string]time.Time{},
+		healthState:    map[string]string{},
+		queues:         map[string][]queuedPrompt{},
+		busy:           map[string]bool{},
+		createRequests: map[string]createResult{},
 	}
-	e.factory = func(c session.ClaudeConfig) claudeProc { return session.NewClaudeProc(c) }
+	e.providers = provider.NewRegistry(provider.NewClaudeAdapter(cfg.ClaudeBin))
 	if persisted, err := e.history.Restore(); err == nil {
 		for _, sess := range persisted {
 			sess.SetSender(e.send)
@@ -87,8 +92,27 @@ func New(cfg Config) *Engine {
 
 func (e *Engine) SetClaudeFactory(factory ClaudeFactory) {
 	if factory != nil {
-		e.factory = factory
+		e.providers = provider.NewRegistry(claudeFactoryAdapter{factory: factory})
 	}
+}
+
+func (e *Engine) SetProviderRegistry(registry *provider.Registry) {
+	if registry != nil {
+		e.providers = registry
+	}
+}
+
+type claudeFactoryAdapter struct{ factory ClaudeFactory }
+
+func (a claudeFactoryAdapter) Descriptor() provider.Descriptor {
+	return provider.NewClaudeAdapter("claude").Descriptor()
+}
+
+func (a claudeFactoryAdapter) NewProcess(c provider.SessionConfig) provider.Process {
+	return a.factory(session.ClaudeConfig{
+		Cwd: c.Cwd, SessionID: c.SessionID, Permission: c.Permission, AddDirs: c.AddDirs,
+		Resume: c.Resume, AllowedTools: c.AllowedTools,
+	})
 }
 
 func (e *Engine) Manager() *session.Manager {

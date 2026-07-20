@@ -64,6 +64,8 @@ const (
 	CodeDeviceNotAuthorized   = "DEVICE_NOT_AUTHORIZED"
 	CodeClaudeNotFound        = "CLAUDE_NOT_FOUND"
 	CodeClaudeVersionMismatch = "CLAUDE_VERSION_MISMATCH"
+	CodeProviderNotAvailable  = "PROVIDER_NOT_AVAILABLE"
+	CodeInvalidPermission     = "INVALID_PERMISSION_MODE"
 )
 
 // Envelope 是所有入站消息的第一层解析结果。

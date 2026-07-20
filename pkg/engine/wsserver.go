@@ -5,10 +5,12 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/gorilla/websocket"
 	"github.com/yang-bin-free/claude-phone/pkg/protocol"
+	"github.com/yang-bin-free/claude-phone/pkg/provider"
 	"github.com/yang-bin-free/claude-phone/pkg/session"
 )
 
@@ -210,6 +212,8 @@ func (e *Engine) handleControl(cl *client, currentSession string, raw []byte) (s
 			return currentSession, err
 		}
 		return currentSession, cl.writeJSON(protocol.TemplateListMsg{Type: protocol.TypeTemplateList, Templates: templates})
+	case protocol.ActionListProviders:
+		return currentSession, cl.writeJSON(e.providerList())
 	case protocol.ActionLoadHistory:
 		sessionID := msg.SessionID
 		if sessionID == "" {
@@ -276,6 +280,15 @@ func (e *Engine) stopSession(s *session.Session) error {
 }
 
 func (e *Engine) createSession(cl *client, msg protocol.ControlMsg) (string, error) {
+	if msg.RequestID != "" {
+		e.createMu.Lock()
+		defer e.createMu.Unlock()
+	}
+	providerID := provider.NormalizeID(msg.Provider)
+	adapter, ok := e.providers.Get(providerID)
+	if !ok || !adapter.Descriptor().Available {
+		return "", errProviderNotAvailable
+	}
 	runtime := e.runtimeConfig()
 	cwd := msg.WorkingDir
 	if cwd == "" {
@@ -303,22 +316,39 @@ func (e *Engine) createSession(cl *client, msg protocol.ControlMsg) (string, err
 	if permission == "" {
 		permission = runtime.DefaultPermission
 	}
+	if !provider.SupportsPermission(adapter.Descriptor(), permission) {
+		return "", errInvalidPermission
+	}
 	name := msg.Name
 	if name == "" {
-		name = "Claude Session"
+		name = "New Session"
+	}
+	signature := strings.Join([]string{providerID, msg.Model, cwd, permission, name}, "\x00")
+	if msg.RequestID != "" {
+		key := cl.deviceID + "\x00" + msg.RequestID
+		e.mu.RLock()
+		prior, exists := e.createRequests[key]
+		e.mu.RUnlock()
+		if exists {
+			if prior.signature != signature {
+				return "", errors.New("requestId was already used with different session parameters")
+			}
+			return prior.message.SessionID, cl.writeJSON(prior.message)
+		}
 	}
 	s, err := e.manager.Create(name, cwd, permission, cl.deviceID)
 	if err != nil {
 		return "", err
 	}
 	s.SetSender(e.send)
+	s.Provider = providerID
+	s.Model = msg.Model
 	if err := e.history.CreateSession(s); err != nil {
 		e.manager.Remove(s.ID)
 		return "", err
 	}
 
-	proc := e.factory(session.ClaudeConfig{
-		Bin:          e.cfg.ClaudeBin,
+	proc := adapter.NewProcess(provider.SessionConfig{
 		Cwd:          cwd,
 		SessionID:    s.ID,
 		Permission:   permission,
@@ -338,12 +368,16 @@ func (e *Engine) createSession(cl *client, msg protocol.ControlMsg) (string, err
 	e.mu.Unlock()
 	_ = e.power.Acquire()
 
-	if err := cl.writeJSON(protocol.SessionCreatedMsg{
-		Type:      protocol.TypeSessionCreated,
-		SessionID: s.ID,
-		Name:      s.Name,
-		Cwd:       s.Cwd,
-	}); err != nil {
+	created := protocol.SessionCreatedMsg{
+		Type: protocol.TypeSessionCreated, SessionID: s.ID, Name: s.Name, Cwd: s.Cwd,
+		Provider: s.Provider, Model: s.Model, PermissionMode: s.Permission, RequestID: msg.RequestID,
+	}
+	if msg.RequestID != "" {
+		e.mu.Lock()
+		e.createRequests[cl.deviceID+"\x00"+msg.RequestID] = createResult{message: created, signature: signature}
+		e.mu.Unlock()
+	}
+	if err := cl.writeJSON(created); err != nil {
 		return "", err
 	}
 	return s.ID, nil
@@ -359,8 +393,12 @@ func (e *Engine) resumeSession(s *session.Session) error {
 		s.SetStatus("active")
 		return nil
 	}
-	proc := e.factory(session.ClaudeConfig{
-		Bin: e.cfg.ClaudeBin, Cwd: s.Cwd, SessionID: s.ID, Permission: s.Permission,
+	adapter, ok := e.providers.Get(s.Provider)
+	if !ok || !adapter.Descriptor().Available {
+		return errProviderNotAvailable
+	}
+	proc := adapter.NewProcess(provider.SessionConfig{
+		Cwd: s.Cwd, SessionID: s.ID, Permission: s.Permission, Model: s.Model,
 		AddDirs: []string{s.Cwd}, Resume: e.sessionExists(s.Cwd, s.ID),
 		AllowedTools: e.permissions.AllowedTools(),
 	})
@@ -441,10 +479,38 @@ func (e *Engine) sessionList(limit, offset int) protocol.SessionListMsg {
 			Owner:       s.Owner,
 			Subscribers: s.Subscribers(),
 			CreatedAt:   s.CreatedAt,
+			Cwd:         s.Cwd,
+			Provider:    provider.NormalizeID(s.Provider),
+			Model:       s.Model,
+			Permission:  s.Permission,
 		})
 	}
 	return protocol.SessionListMsg{Type: protocol.TypeSessionList, Sessions: infos}
 }
+
+func (e *Engine) providerList() protocol.ProviderListMsg {
+	descriptors := e.providers.Descriptors()
+	items := make([]protocol.ProviderInfo, 0, len(descriptors))
+	for _, descriptor := range descriptors {
+		permissions := make([]protocol.ProviderPermission, 0, len(descriptor.Permissions))
+		for _, option := range descriptor.Permissions {
+			permissions = append(permissions, protocol.ProviderPermission{
+				ID: option.ID, Label: option.Label, Description: option.Description,
+				Dangerous: option.Dangerous, Mutable: option.Mutable,
+			})
+		}
+		items = append(items, protocol.ProviderInfo{
+			ID: descriptor.ID, Name: descriptor.Name, Available: descriptor.Available,
+			UnavailableReason: descriptor.UnavailableReason, Permissions: permissions, Models: descriptor.Models,
+		})
+	}
+	return protocol.ProviderListMsg{Type: protocol.TypeProviderList, Providers: items}
+}
+
+var (
+	errProviderNotAvailable = errors.New("provider is not available")
+	errInvalidPermission    = errors.New("permission mode is not supported by provider")
+)
 
 func errorFor(err error) protocol.ErrorMsg {
 	switch {
@@ -454,6 +520,10 @@ func errorFor(err error) protocol.ErrorMsg {
 		return protocol.NewError(protocol.CodeSessionNotFound, err.Error())
 	case errors.Is(err, session.ErrSessionNotOwner):
 		return protocol.NewError(protocol.CodeSessionNotOwner, err.Error())
+	case errors.Is(err, errProviderNotAvailable):
+		return protocol.NewError(protocol.CodeProviderNotAvailable, err.Error())
+	case errors.Is(err, errInvalidPermission):
+		return protocol.NewError(protocol.CodeInvalidPermission, err.Error())
 	default:
 		return protocol.NewError("ENGINE_ERROR", err.Error())
 	}

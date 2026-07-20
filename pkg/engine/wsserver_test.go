@@ -11,6 +11,7 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/yang-bin-free/claude-phone/pkg/adminproto"
 	"github.com/yang-bin-free/claude-phone/pkg/protocol"
+	"github.com/yang-bin-free/claude-phone/pkg/provider"
 	"github.com/yang-bin-free/claude-phone/pkg/session"
 )
 
@@ -111,6 +112,95 @@ func TestWebSocket_CreateSessionAndStream(t *testing.T) {
 	_ = conn.SetReadDeadline(time.Now().Add(time.Second))
 	for _, typ := range want {
 		assertType(t, conn, typ)
+	}
+}
+
+func TestWebSocket_CreateSessionDefaultsProviderAndEchoesRequestID(t *testing.T) {
+	e := New(Config{DataDir: t.TempDir(), DefaultWorkingDir: ".", DeviceTokens: map[string]string{"device": "Mac"}})
+	adapter := &recordingAdapter{id: provider.ClaudeID}
+	e.SetProviderRegistry(provider.NewRegistry(adapter))
+	server, conn := openAuthenticatedEngine(t, e, "device")
+	defer server.Close()
+	defer conn.Close()
+
+	writeJSON(t, conn, protocol.ControlMsg{
+		Type: protocol.TypeControl, Action: protocol.ActionCreateSession,
+		Name: "你好", WorkingDir: ".", PermissionMode: "default", RequestID: "req-1",
+	})
+	created := readSessionCreated(t, conn)
+	if created.Provider != provider.ClaudeID || created.RequestID != "req-1" || created.PermissionMode != "default" {
+		t.Fatalf("created=%+v", created)
+	}
+	sess, ok := e.manager.Get(created.SessionID)
+	if !ok || sess.Provider != provider.ClaudeID {
+		t.Fatalf("session=%+v ok=%v", sess, ok)
+	}
+	if len(adapter.configs) != 1 || adapter.configs[0].SessionID != created.SessionID {
+		t.Fatalf("provider configs=%+v", adapter.configs)
+	}
+}
+
+func TestWebSocket_CreateSessionRequestIDIsIdempotent(t *testing.T) {
+	e := New(Config{DataDir: t.TempDir(), DefaultWorkingDir: ".", DeviceTokens: map[string]string{"device": "Mac"}})
+	adapter := &recordingAdapter{id: provider.ClaudeID}
+	e.SetProviderRegistry(provider.NewRegistry(adapter))
+	server, conn := openAuthenticatedEngine(t, e, "device")
+	defer server.Close()
+	defer conn.Close()
+	request := protocol.ControlMsg{
+		Type: protocol.TypeControl, Action: protocol.ActionCreateSession,
+		Name: "幂等", WorkingDir: ".", PermissionMode: "default", RequestID: "req-stable",
+	}
+
+	writeJSON(t, conn, request)
+	first := readSessionCreated(t, conn)
+	writeJSON(t, conn, request)
+	second := readSessionCreated(t, conn)
+	if first.SessionID != second.SessionID {
+		t.Fatalf("duplicate request created %q then %q", first.SessionID, second.SessionID)
+	}
+	if len(adapter.configs) != 1 || len(e.manager.List()) != 1 {
+		t.Fatalf("processes=%d sessions=%d", len(adapter.configs), len(e.manager.List()))
+	}
+}
+
+func TestWebSocket_CreateSessionRejectsUnknownProvider(t *testing.T) {
+	e := New(Config{DataDir: t.TempDir(), DefaultWorkingDir: ".", DeviceTokens: map[string]string{"device": "Mac"}})
+	e.SetProviderRegistry(provider.NewRegistry(&recordingAdapter{id: provider.ClaudeID}))
+	server, conn := openAuthenticatedEngine(t, e, "device")
+	defer server.Close()
+	defer conn.Close()
+
+	writeJSON(t, conn, protocol.ControlMsg{
+		Type: protocol.TypeControl, Action: protocol.ActionCreateSession,
+		WorkingDir: ".", Provider: "codex", PermissionMode: "default", RequestID: "req-codex",
+	})
+	got := readProtocolError(t, conn)
+	if got.Code != protocol.CodeProviderNotAvailable {
+		t.Fatalf("error=%+v", got)
+	}
+	if len(e.manager.List()) != 0 {
+		t.Fatalf("unknown provider created sessions: %d", len(e.manager.List()))
+	}
+}
+
+func TestWebSocket_ListProvidersReturnsDescriptor(t *testing.T) {
+	e := New(Config{DataDir: t.TempDir(), DeviceTokens: map[string]string{"device": "Mac"}})
+	e.SetProviderRegistry(provider.NewRegistry(&recordingAdapter{id: provider.ClaudeID}))
+	server, conn := openAuthenticatedEngine(t, e, "device")
+	defer server.Close()
+	defer conn.Close()
+	writeJSON(t, conn, protocol.ControlMsg{Type: protocol.TypeControl, Action: protocol.ActionListProviders})
+	_, payload, err := conn.ReadMessage()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got protocol.ProviderListMsg
+	if err := json.Unmarshal(payload, &got); err != nil {
+		t.Fatal(err)
+	}
+	if got.Type != protocol.TypeProviderList || len(got.Providers) != 1 || got.Providers[0].ID != provider.ClaudeID {
+		t.Fatalf("providers=%+v", got)
 	}
 }
 
@@ -237,6 +327,49 @@ func readSessionCreated(t *testing.T, conn *websocket.Conn) protocol.SessionCrea
 		t.Fatalf("unexpected message: %s", payload)
 	}
 	return msg
+}
+
+func openAuthenticatedEngine(t *testing.T, e *Engine, device string) (*httptest.Server, *websocket.Conn) {
+	t.Helper()
+	server := httptest.NewServer(e.Handler())
+	conn, _, err := websocket.DefaultDialer.Dial("ws"+server.URL[len("http"):]+"/ws", nil)
+	if err != nil {
+		server.Close()
+		t.Fatal(err)
+	}
+	writeJSON(t, conn, protocol.AuthMsg{Type: protocol.TypeAuth, DeviceToken: device, DeviceName: "Mac"})
+	assertType(t, conn, protocol.TypeHello)
+	return server, conn
+}
+
+func readProtocolError(t *testing.T, conn *websocket.Conn) protocol.ErrorMsg {
+	t.Helper()
+	_, payload, err := conn.ReadMessage()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got protocol.ErrorMsg
+	if err := json.Unmarshal(payload, &got); err != nil {
+		t.Fatal(err)
+	}
+	return got
+}
+
+type recordingAdapter struct {
+	id      string
+	configs []provider.SessionConfig
+}
+
+func (a *recordingAdapter) Descriptor() provider.Descriptor {
+	return provider.Descriptor{
+		ID: a.id, Name: "Test Provider", Available: true,
+		Permissions: []provider.PermissionOption{{ID: "default", Label: "每次询问", Mutable: true}},
+	}
+}
+
+func (a *recordingAdapter) NewProcess(config provider.SessionConfig) provider.Process {
+	a.configs = append(a.configs, config)
+	return &stubClaudeProc{}
 }
 
 func TestHandleControl_LeaveSession(t *testing.T) {
