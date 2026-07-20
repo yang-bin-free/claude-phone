@@ -3,8 +3,9 @@ package engine
 
 import (
 	"os"
-	"path/filepath"
 	"time"
+
+	"github.com/yang-bin-free/claude-phone/pkg/product"
 )
 
 const DefaultAddr = "127.0.0.1:9876"
@@ -62,9 +63,12 @@ func (c Config) withDefaults() Config {
 	}
 	if c.DataDir == "" {
 		if home, err := os.UserHomeDir(); err == nil {
-			c.DataDir = filepath.Join(home, ".claude-phone")
+			c.DataDir, _, err = product.ResolveDataDir(home, "")
+			if err != nil {
+				c.DataDir = product.DefaultDataDir(home)
+			}
 		} else {
-			c.DataDir = ".claude-phone"
+			c.DataDir = product.DataDirName
 		}
 	}
 	if c.DeviceTokens == nil {
