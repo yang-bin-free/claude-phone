@@ -20,6 +20,7 @@ const (
 
 	TypeHello           = "hello"
 	TypeProjectList     = "project_list"
+	TypeProviderList    = "provider_list"
 	TypeTemplateList    = "template_list"
 	TypeSessionList     = "session_list"
 	TypeSessionCreated  = "session_created"
@@ -46,6 +47,8 @@ const (
 	ActionListSessions  = "list_sessions"
 	ActionListProjects  = "list_projects"
 	ActionListTemplates = "list_templates"
+	ActionListProviders = "list_providers"
+	ActionSetPermission = "set_permission_mode"
 	ActionCancel        = "cancel"
 	ActionLoadHistory   = "load_history"
 	ActionPing          = "ping"
@@ -96,6 +99,9 @@ type ControlMsg struct {
 	Name           string `json:"name,omitempty"`
 	WorkingDir     string `json:"workingDir,omitempty"`
 	PermissionMode string `json:"permissionMode,omitempty"`
+	Provider       string `json:"provider,omitempty"`
+	Model          string `json:"model,omitempty"`
+	RequestID      string `json:"requestId,omitempty"`
 	Limit          int    `json:"limit,omitempty"`
 	Offset         int    `json:"offset,omitempty"`
 	BeforeMsgID    string `json:"beforeMsgId,omitempty"`
@@ -122,6 +128,10 @@ type SessionInfo struct {
 	Owner       string   `json:"owner"`
 	Subscribers []string `json:"subscribers"`
 	CreatedAt   int64    `json:"createdAt"`
+	Cwd         string   `json:"cwd"`
+	Provider    string   `json:"provider"`
+	Model       string   `json:"model,omitempty"`
+	Permission  string   `json:"permissionMode"`
 }
 
 type SessionListMsg struct {
@@ -140,6 +150,28 @@ type ProjectListMsg struct {
 	Projects []ProjectInfo `json:"projects"`
 }
 
+type ProviderPermission struct {
+	ID          string `json:"id"`
+	Label       string `json:"label"`
+	Description string `json:"description"`
+	Dangerous   bool   `json:"dangerous,omitempty"`
+	Mutable     bool   `json:"mutable"`
+}
+
+type ProviderInfo struct {
+	ID                string               `json:"id"`
+	Name              string               `json:"name"`
+	Available         bool                 `json:"available"`
+	UnavailableReason string               `json:"unavailableReason,omitempty"`
+	Permissions       []ProviderPermission `json:"permissions"`
+	Models            []string             `json:"models,omitempty"`
+}
+
+type ProviderListMsg struct {
+	Type      string         `json:"type"`
+	Providers []ProviderInfo `json:"providers"`
+}
+
 type TemplateInfo struct {
 	TemplateID string `json:"templateId,omitempty" yaml:"-"`
 	Label      string `json:"label" yaml:"label"`
@@ -152,10 +184,14 @@ type TemplateListMsg struct {
 }
 
 type SessionCreatedMsg struct {
-	Type      string `json:"type"`
-	SessionID string `json:"sessionId"`
-	Name      string `json:"name"`
-	Cwd       string `json:"cwd"`
+	Type           string `json:"type"`
+	SessionID      string `json:"sessionId"`
+	Name           string `json:"name"`
+	Cwd            string `json:"cwd"`
+	Provider       string `json:"provider"`
+	Model          string `json:"model,omitempty"`
+	PermissionMode string `json:"permissionMode"`
+	RequestID      string `json:"requestId,omitempty"`
 }
 
 type SessionStoppedMsg struct {

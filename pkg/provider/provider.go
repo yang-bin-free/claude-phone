@@ -1,0 +1,98 @@
+// Package provider defines the coding-agent boundary used by the engine.
+package provider
+
+import (
+	"strings"
+
+	"github.com/yang-bin-free/claude-phone/pkg/session"
+)
+
+const ClaudeID = "claude"
+
+type PermissionOption struct {
+	ID          string `json:"id"`
+	Label       string `json:"label"`
+	Description string `json:"description"`
+	Dangerous   bool   `json:"dangerous,omitempty"`
+	Mutable     bool   `json:"mutable"`
+}
+
+type Descriptor struct {
+	ID                string             `json:"id"`
+	Name              string             `json:"name"`
+	Available         bool               `json:"available"`
+	UnavailableReason string             `json:"unavailableReason,omitempty"`
+	Permissions       []PermissionOption `json:"permissions"`
+	Models            []string           `json:"models,omitempty"`
+}
+
+type SessionConfig struct {
+	Cwd          string
+	SessionID    string
+	Permission   string
+	Model        string
+	Resume       bool
+	AddDirs      []string
+	AllowedTools []string
+}
+
+type Process interface {
+	OnOutput(session.OutputFunc)
+	Start() error
+	Send(string) error
+	Stop() error
+}
+
+type Adapter interface {
+	Descriptor() Descriptor
+	NewProcess(SessionConfig) Process
+}
+
+type Registry struct {
+	byID map[string]Adapter
+}
+
+func NewRegistry(adapters ...Adapter) *Registry {
+	registry := &Registry{byID: make(map[string]Adapter, len(adapters))}
+	for _, adapter := range adapters {
+		if adapter == nil {
+			continue
+		}
+		id := NormalizeID(adapter.Descriptor().ID)
+		registry.byID[id] = adapter
+	}
+	return registry
+}
+
+func NormalizeID(id string) string {
+	id = strings.TrimSpace(strings.ToLower(id))
+	if id == "" {
+		return ClaudeID
+	}
+	return id
+}
+
+func (r *Registry) Get(id string) (Adapter, bool) {
+	if r == nil {
+		return nil, false
+	}
+	adapter, ok := r.byID[NormalizeID(id)]
+	return adapter, ok
+}
+
+func (r *Registry) Descriptors() []Descriptor {
+	out := make([]Descriptor, 0, len(r.byID))
+	for _, adapter := range r.byID {
+		out = append(out, adapter.Descriptor())
+	}
+	return out
+}
+
+func SupportsPermission(descriptor Descriptor, permission string) bool {
+	for _, option := range descriptor.Permissions {
+		if option.ID == permission {
+			return true
+		}
+	}
+	return false
+}

@@ -24,6 +24,8 @@ type sessionMeta struct {
 	Cwd        string `json:"cwd"`
 	Owner      string `json:"owner"`
 	Permission string `json:"permission"`
+	Provider   string `json:"provider,omitempty"`
+	Model      string `json:"model,omitempty"`
 	CreatedAt  int64  `json:"createdAt"`
 }
 
@@ -38,7 +40,7 @@ func (s *historyStore) CreateSession(sess *session.Session) error {
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return err
 	}
-	meta := sessionMeta{SessionID: sess.ID, Name: sess.Name, Cwd: sess.Cwd, Owner: sess.Owner, Permission: sess.Permission, CreatedAt: sess.CreatedAt}
+	meta := sessionMeta{SessionID: sess.ID, Name: sess.Name, Cwd: sess.Cwd, Owner: sess.Owner, Permission: sess.Permission, Provider: sess.Provider, Model: sess.Model, CreatedAt: sess.CreatedAt}
 	b, err := json.MarshalIndent(meta, "", "  ")
 	if err != nil {
 		return err
@@ -120,6 +122,10 @@ func (s *historyStore) Restore() ([]*session.Session, error) {
 		}
 		sess := session.NewSession(meta.SessionID, meta.Name, meta.Cwd, meta.Owner)
 		sess.Permission = meta.Permission
+		if meta.Provider != "" {
+			sess.Provider = meta.Provider
+		}
+		sess.Model = meta.Model
 		sess.CreatedAt = meta.CreatedAt
 		sess.SetStatus("dormant")
 		sessions = append(sessions, sess)

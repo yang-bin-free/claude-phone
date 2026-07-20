@@ -13,6 +13,8 @@ type Session struct {
 	Cwd        string
 	Owner      string
 	Permission string
+	Provider   string
+	Model      string
 	Status     string // active | dormant | stopped
 	CreatedAt  int64
 
@@ -24,12 +26,13 @@ type Session struct {
 // NewSession 创建会话，owner 自动成为首个订阅者。
 func NewSession(id, name, cwd, owner string) *Session {
 	return &Session{
-		ID:     id,
-		Name:   name,
-		Cwd:    cwd,
-		Owner:  owner,
-		Status: "active",
-		subs:   map[string]struct{}{owner: {}},
+		ID:       id,
+		Name:     name,
+		Cwd:      cwd,
+		Owner:    owner,
+		Provider: "claude",
+		Status:   "active",
+		subs:     map[string]struct{}{owner: {}},
 	}
 }
 

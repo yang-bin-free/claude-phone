@@ -1,6 +1,8 @@
 package engine
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/yang-bin-free/claude-phone/pkg/session"
@@ -32,6 +34,24 @@ func TestEngineReloadsPersistedSessionAsDormant(t *testing.T) {
 	messages, err := restarted.history.Load(s.ID, 50)
 	if err != nil || len(messages) != 1 {
 		t.Fatalf("messages=%d err=%v", len(messages), err)
+	}
+}
+
+func TestHistoryRestoreDefaultsMissingProviderToClaude(t *testing.T) {
+	dataDir := t.TempDir()
+	dir := filepath.Join(dataDir, "sessions", "legacy")
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	legacy := `{"sessionId":"legacy","name":"Old","cwd":"/tmp","owner":"device","permission":"default","createdAt":123}`
+	if err := os.WriteFile(filepath.Join(dir, "meta.json"), []byte(legacy), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	restarted := New(Config{DataDir: dataDir})
+	loaded, ok := restarted.manager.Get("legacy")
+	if !ok || loaded.Provider != "claude" {
+		t.Fatalf("loaded=%+v ok=%v", loaded, ok)
 	}
 }
 

@@ -24,7 +24,7 @@ func TestParseEnvelope_Auth(t *testing.T) {
 }
 
 func TestParseControl_Action(t *testing.T) {
-	raw := []byte(`{"type":"control","action":"create_session","name":"车险联调","workingDir":"/p","permissionMode":"bypassPermissions"}`)
+	raw := []byte(`{"type":"control","action":"create_session","name":"车险联调","workingDir":"/p","provider":"claude","model":"sonnet","permissionMode":"bypassPermissions","requestId":"req-1"}`)
 	env, err := ParseEnvelope(raw)
 	if err != nil {
 		t.Fatalf("err: %v", err)
@@ -36,8 +36,22 @@ func TestParseControl_Action(t *testing.T) {
 	if err := json.Unmarshal(env.Raw, &c); err != nil {
 		t.Fatalf("unmarshal control: %v", err)
 	}
-	if c.Action != ActionCreateSession || c.Name != "车险联调" || c.WorkingDir != "/p" {
+	if c.Action != ActionCreateSession || c.Name != "车险联调" || c.WorkingDir != "/p" || c.Provider != "claude" || c.Model != "sonnet" || c.RequestID != "req-1" {
 		t.Fatalf("bad control: %+v", c)
+	}
+}
+
+func TestSessionCreatedIncludesProviderConfiguration(t *testing.T) {
+	b, err := json.Marshal(SessionCreatedMsg{
+		Type: TypeSessionCreated, SessionID: "s1", Name: "demo", Cwd: "/p",
+		Provider: "claude", Model: "sonnet", PermissionMode: "plan", RequestID: "req-1",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := `{"type":"session_created","sessionId":"s1","name":"demo","cwd":"/p","provider":"claude","model":"sonnet","permissionMode":"plan","requestId":"req-1"}`
+	if string(b) != want {
+		t.Fatalf("got %s want %s", b, want)
 	}
 }
 
