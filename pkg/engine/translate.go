@@ -15,13 +15,16 @@ func translateClaudeOutput(payload []byte) [][]byte {
 		Result  string   `json:"result"`
 		Errors  []string `json:"errors"`
 		Event   struct {
-			Type         string                      `json:"type"`
-			Delta        struct{ Type, Text string } `json:"delta"`
-			ContentBlock struct {
-				Type, Name string
-				Input      json.RawMessage
-			} `json:"content_block"`
+			Type  string                      `json:"type"`
+			Delta struct{ Type, Text string } `json:"delta"`
 		} `json:"event"`
+		Message struct {
+			Content []struct {
+				Type  string          `json:"type"`
+				Name  string          `json:"name"`
+				Input json.RawMessage `json:"input"`
+			} `json:"content"`
+		} `json:"message"`
 	}
 	if json.Unmarshal(payload, &raw) != nil {
 		return nil
@@ -39,11 +42,22 @@ func translateClaudeOutput(payload []byte) [][]byte {
 			if raw.Event.Delta.Type == "text_delta" && raw.Event.Delta.Text != "" {
 				return marshalTranslated(protocol.TokenMsg{Type: protocol.TypeToken, Content: raw.Event.Delta.Text})
 			}
-		case "content_block_start":
-			if raw.Event.ContentBlock.Type == "tool_use" {
-				return marshalTranslated(protocol.ToolUseMsg{Type: protocol.TypeToolUse, Tool: raw.Event.ContentBlock.Name, Input: string(raw.Event.ContentBlock.Input)})
-			}
 		}
+	case "assistant":
+		messages := make([][]byte, 0, len(raw.Message.Content))
+		for _, block := range raw.Message.Content {
+			if block.Type != "tool_use" || block.Name == "" {
+				continue
+			}
+			input := strings.TrimSpace(string(block.Input))
+			if input == "" || input == "null" {
+				continue
+			}
+			messages = append(messages, marshalTranslated(protocol.ToolUseMsg{
+				Type: protocol.TypeToolUse, Tool: block.Name, Input: input,
+			})...)
+		}
+		return messages
 	case "result":
 		if raw.IsError {
 			message := strings.TrimSpace(raw.Result)

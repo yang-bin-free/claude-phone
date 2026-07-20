@@ -364,3 +364,46 @@ func TestDirectoryPickerCanBeRetriedAfterCancelOrFailure(t *testing.T) {
 		}
 	}
 }
+
+func TestToolCallsRenderReadableCompletedInput(t *testing.T) {
+	htmlBytes, err := fs.ReadFile(Assets, "chat/index.html")
+	if err != nil {
+		t.Fatal(err)
+	}
+	html := string(htmlBytes)
+	formatterScript := strings.Index(html, `src="../assets/tool-format.js"`)
+	chatScript := strings.Index(html, `src="../assets/chat.js"`)
+	if formatterScript < 0 || chatScript < 0 || formatterScript > chatScript {
+		t.Fatal("tool formatter must load before chat.js")
+	}
+
+	jsBytes, err := fs.ReadFile(Assets, "chat/chat.js")
+	if err != nil {
+		t.Fatal(err)
+	}
+	js := string(jsBytes)
+	for _, marker := range []string{
+		`const { formatToolUse } = globalThis.CodeAfarToolFormat`,
+		`append("tool", formatToolUse(item.tool, item.input))`,
+		`append("tool", formatToolUse(msg.tool, msg.input))`,
+	} {
+		if !strings.Contains(js, marker) {
+			t.Errorf("readable tool rendering missing %q", marker)
+		}
+	}
+	formatterBytes, err := fs.ReadFile(Assets, "chat/tool-format.js")
+	if err != nil {
+		t.Fatal(err)
+	}
+	formatter := string(formatterBytes)
+	for _, marker := range []string{
+		`function formatToolUse(tool, input)`,
+		`Read: ["读取文件", "file_path"]`,
+		`Bash: ["执行命令", "command"]`,
+		`Object.create(null)`,
+	} {
+		if !strings.Contains(formatter, marker) {
+			t.Errorf("tool formatter missing %q", marker)
+		}
+	}
+}

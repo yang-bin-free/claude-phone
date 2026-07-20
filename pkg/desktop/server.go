@@ -70,6 +70,7 @@ func NewHandler(options HandlerOptions) http.Handler {
 	})
 	mux.HandleFunc("/", serveAsset("chat/index.html", "text/html"))
 	mux.HandleFunc("/assets/chat.js", serveAsset("chat/chat.js", "text/javascript"))
+	mux.HandleFunc("/assets/tool-format.js", serveAsset("chat/tool-format.js", "text/javascript"))
 	mux.HandleFunc("/assets/admin.js", serveAsset("admin/admin.js", "text/javascript"))
 	mux.HandleFunc("/assets/core.css", serveAsset("chat/core.css", "text/css"))
 	mux.HandleFunc("/assets/desktop.css", serveAsset("chat/desktop.css", "text/css"))

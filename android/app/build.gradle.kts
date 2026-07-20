@@ -5,7 +5,7 @@ plugins {
 
 val syncWebAssets by tasks.registering(Sync::class) {
     from("../../web/chat/index.html") { into("chat") }
-    from(listOf("../../web/chat/chat.js", "../../web/chat/core.css", "../../web/chat/desktop.css", "../../web/chat/mobile.css")) {
+    from(listOf("../../web/chat/chat.js", "../../web/chat/tool-format.js", "../../web/chat/core.css", "../../web/chat/desktop.css", "../../web/chat/mobile.css")) {
         into("assets")
     }
     from(listOf("../../web/admin/admin.js", "../../web/admin/admin.css")) { into("assets") }
