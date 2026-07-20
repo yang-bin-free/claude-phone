@@ -5,6 +5,7 @@ cd "$(dirname "$0")/.."
 
 version="${VERSION:-0.1.0-dev}"
 release_dir="build/release"
+rm -rf "${release_dir}"
 mkdir -p "${release_dir}"
 
 VERSION="${version}" ./scripts/build-mac-app.sh

@@ -10,6 +10,16 @@ staging="${parent}/.CodeAfar.installing.$$"
 previous="${parent}/.CodeAfar.previous.$$"
 had_previous=0
 installed=0
+legacy_app="/Applications/Claude Phone.app"
+legacy_plist="${HOME}/Library/LaunchAgents/com.claude.phone.plist"
+legacy_app_backup="${parent}/.Claude Phone.previous.$$"
+legacy_plist_backup="${legacy_plist}.codeafar-backup.$$"
+new_plist="${HOME}/Library/LaunchAgents/com.codeafar.mac.plist"
+legacy_autostart=0
+new_autostart_preexisting=0
+migrated_autostart=0
+[[ -f "${legacy_plist}" ]] && legacy_autostart=1
+[[ -f "${new_plist}" ]] && new_autostart_preexisting=1
 
 installed_pid() {
   /bin/ps -axo pid=,command= | /usr/bin/awk -v executable="${destination}/Contents/MacOS/codeafar" \
@@ -19,7 +29,8 @@ installed_pid() {
 cleanup() {
   /bin/rm -rf "${staging}"
   if [[ "${installed}" == "1" ]]; then
-    /bin/rm -rf "${previous}"
+	/bin/rm -rf "${previous}" "${legacy_app_backup}"
+	/bin/rm -f "${legacy_plist_backup}"
   fi
 }
 
@@ -29,6 +40,32 @@ restore_previous() {
   if [[ "${had_previous}" == "1" && -d "${previous}" ]]; then
     /bin/mv "${previous}" "${destination}"
   fi
+	if [[ -d "${legacy_app_backup}" ]]; then
+	  /bin/mv "${legacy_app_backup}" "${legacy_app}"
+	fi
+	if [[ -f "${legacy_plist_backup}" ]]; then
+	  /bin/mv "${legacy_plist_backup}" "${legacy_plist}"
+	fi
+	if [[ "${migrated_autostart}" == "1" && "${new_autostart_preexisting}" == "0" ]]; then
+	  /bin/launchctl bootout "gui/${UID}/com.codeafar.mac" >/dev/null 2>&1 || true
+	  /bin/rm -f "${new_plist}"
+	fi
+	if [[ "${legacy_autostart}" == "1" && -f "${legacy_plist}" ]]; then
+	  /bin/launchctl bootstrap "gui/${UID}" "${legacy_plist}" >/dev/null 2>&1 || true
+	fi
+}
+
+retire_legacy_installation() {
+  if [[ "${legacy_autostart}" == "1" ]]; then
+	  migrated_autostart=1
+    if ! "${destination}/Contents/MacOS/codeafar" autostart install; then
+      echo "Could not migrate the legacy login item" >&2
+      return 1
+    fi
+  fi
+  /bin/launchctl bootout "gui/${UID}/com.claude.phone" >/dev/null 2>&1 || true
+	if [[ -f "${legacy_plist}" ]] && ! /bin/mv "${legacy_plist}" "${legacy_plist_backup}"; then return 1; fi
+	if [[ -d "${legacy_app}" ]] && ! /bin/mv "${legacy_app}" "${legacy_app_backup}"; then return 1; fi
 }
 
 trap cleanup EXIT
@@ -39,7 +76,8 @@ trap cleanup EXIT
 }
 /usr/bin/codesign --verify --deep --strict "${source_app}"
 
-/bin/rm -rf "${staging}" "${previous}"
+/bin/rm -rf "${staging}" "${previous}" "${legacy_app_backup}"
+/bin/rm -f "${legacy_plist_backup}"
 /usr/bin/ditto "${source_app}" "${staging}"
 /usr/bin/codesign --verify --deep --strict "${staging}"
 
@@ -71,9 +109,13 @@ open "${destination}"
 for _ in {1..60}; do
   pid="$(installed_pid)"
   if [[ -n "${pid}" ]] && /usr/sbin/lsof -nP -a -p "${pid}" -iTCP:9877 -sTCP:LISTEN >/dev/null 2>&1; then
-    sleep 0.5
-    if ! /bin/kill -0 "${pid}" >/dev/null 2>&1; then
+    status="$(/usr/bin/curl --silent --fail --max-time 1 http://127.0.0.1:9877/desktop/status 2>/dev/null || true)"
+    if [[ "${status}" != *'"ready":true'* ]] || ! /bin/kill -0 "${pid}" >/dev/null 2>&1; then
       continue
+    fi
+    if ! retire_legacy_installation; then
+      restore_previous
+      exit 1
     fi
     installed=1
     echo "Installed and launched ${destination} (pid ${pid})"

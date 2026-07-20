@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-func TestConfigDefaultsMigrateLegacyDataDirectory(t *testing.T) {
+func TestConfigDefaultsDoNotHideMigrationErrors(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	legacy := filepath.Join(home, ".claude-phone")
@@ -22,8 +22,11 @@ func TestConfigDefaultsMigrateLegacyDataDirectory(t *testing.T) {
 	if got.DataDir != want {
 		t.Fatalf("DataDir=%q want %q", got.DataDir, want)
 	}
-	if _, err := os.Stat(filepath.Join(want, "devices.yaml")); err != nil {
-		t.Fatalf("legacy data was not migrated: %v", err)
+	if _, err := os.Stat(filepath.Join(legacy, "devices.yaml")); err != nil {
+		t.Fatalf("withDefaults unexpectedly moved legacy data: %v", err)
+	}
+	if _, err := os.Stat(want); !os.IsNotExist(err) {
+		t.Fatalf("withDefaults unexpectedly created data directory: %v", err)
 	}
 }
 

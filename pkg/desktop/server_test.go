@@ -75,7 +75,7 @@ func TestDesktopProjectEndpointRejectsNonLoopbackRequest(t *testing.T) {
 
 func TestDesktopProjectEndpointAddsPickedDirectory(t *testing.T) {
 	directory := t.TempDir()
-	h := NewHandler(HandlerOptions{AddProject: func(path string) (protocol.ProjectInfo, error) {
+	h := NewHandler(HandlerOptions{AdminToken: "secret", AddProject: func(path string) (protocol.ProjectInfo, error) {
 		if path != directory {
 			t.Fatalf("path=%q want %q", path, directory)
 		}
@@ -83,6 +83,8 @@ func TestDesktopProjectEndpointAddsPickedDirectory(t *testing.T) {
 	}})
 	request := httptest.NewRequest(http.MethodPost, "/desktop/projects", strings.NewReader(`{"path":`+quotedJSON(t, directory)+`}`))
 	request.RemoteAddr = "127.0.0.1:1234"
+	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set("X-CodeAfar-Admin-Token", "secret")
 	response := httptest.NewRecorder()
 
 	h.ServeHTTP(response, request)
@@ -96,6 +98,35 @@ func TestDesktopProjectEndpointAddsPickedDirectory(t *testing.T) {
 	}
 	if got.Path != directory || got.Name != "Demo" {
 		t.Fatalf("project=%+v", got)
+	}
+}
+
+func TestDesktopProjectEndpointRejectsLoopbackCSRF(t *testing.T) {
+	called := false
+	h := NewHandler(HandlerOptions{AdminToken: "secret", AddProject: func(string) (protocol.ProjectInfo, error) {
+		called = true
+		return protocol.ProjectInfo{}, nil
+	}})
+	requests := []*http.Request{
+		httptest.NewRequest(http.MethodPost, "/desktop/projects", strings.NewReader(`{"path":"/tmp"}`)),
+		httptest.NewRequest(http.MethodPost, "/desktop/projects", strings.NewReader(`{"path":"/tmp"}`)),
+		httptest.NewRequest(http.MethodPost, "/desktop/projects", strings.NewReader(`{"path":"/tmp"}`)),
+	}
+	requests[0].Header.Set("Content-Type", "text/plain")
+	requests[0].Header.Set("X-CodeAfar-Admin-Token", "secret")
+	requests[1].Header.Set("Content-Type", "application/json")
+	requests[2].Header.Set("Content-Type", "application/json")
+	requests[2].Header.Set("X-CodeAfar-Admin-Token", "wrong")
+	for _, request := range requests {
+		request.RemoteAddr = "127.0.0.1:1234"
+		response := httptest.NewRecorder()
+		h.ServeHTTP(response, request)
+		if response.Code != http.StatusForbidden {
+			t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
+		}
+	}
+	if called {
+		t.Fatal("unauthorized loopback request reached project callback")
 	}
 }
 

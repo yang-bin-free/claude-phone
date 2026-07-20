@@ -2,7 +2,6 @@ package engine
 
 import (
 	"encoding/json"
-	"errors"
 
 	"github.com/yang-bin-free/claude-phone/pkg/protocol"
 	"github.com/yang-bin-free/claude-phone/pkg/provider"
@@ -17,7 +16,7 @@ func (e *Engine) requestPermissionChange(sess *session.Session, permission strin
 	if !provider.SupportsPermission(adapter.Descriptor(), permission) {
 		return errInvalidPermission
 	}
-	if permission == sess.Permission {
+	if permission == sess.PermissionMode() {
 		e.broadcastPermission(sess, permission, false)
 		return nil
 	}
@@ -33,6 +32,11 @@ func (e *Engine) requestPermissionChange(sess *session.Session, permission strin
 }
 
 func (e *Engine) applyPermissionChange(sess *session.Session, permission string) error {
+	e.permissionMu.Lock()
+	defer e.permissionMu.Unlock()
+	if current, ok := e.manager.Get(sess.ID); !ok || current != sess {
+		return session.ErrSessionNotFound
+	}
 	adapter, ok := e.providers.Get(sess.Provider)
 	if !ok || !adapter.Descriptor().Available {
 		return errProviderNotAvailable
@@ -40,30 +44,22 @@ func (e *Engine) applyPermissionChange(sess *session.Session, permission string)
 	e.mu.RLock()
 	oldProcess := e.procs[sess.ID]
 	e.mu.RUnlock()
-	oldPermission := sess.Permission
-	if oldProcess != nil {
-		_ = oldProcess.Stop()
-	}
+	oldPermission := sess.PermissionMode()
 	newProcess := e.newSessionProcess(adapter, sess, permission)
 	if err := newProcess.Start(); err != nil {
-		if oldProcess != nil {
-			rollback := e.newSessionProcess(adapter, sess, oldPermission)
-			if rollbackErr := rollback.Start(); rollbackErr == nil {
-				e.mu.Lock()
-				e.procs[sess.ID] = rollback
-				e.mu.Unlock()
-			} else {
-				return errors.Join(err, rollbackErr)
-			}
-		}
+		return err
+	}
+	sess.SetPermission(permission)
+	if err := e.updateSession(sess); err != nil {
+		sess.SetPermission(oldPermission)
+		_ = newProcess.Stop()
 		return err
 	}
 	e.mu.Lock()
 	e.procs[sess.ID] = newProcess
 	e.mu.Unlock()
-	sess.SetPermission(permission)
-	if err := e.history.UpdateSession(sess); err != nil {
-		return err
+	if oldProcess != nil {
+		_ = oldProcess.Stop()
 	}
 	e.broadcastPermission(sess, permission, false)
 	return nil

@@ -201,7 +201,10 @@ func TestChatScriptCreatesThenSendsPendingFirstPrompt(t *testing.T) {
 	for _, marker := range []string{
 		`function beginDraft()`, `status: "draft"`, `requestId: newRequestID()`,
 		`firstPrompt: content`, `action: "create_session"`, `requestId: state.draft.requestId`,
-		`case "session_created":`, `send({ type: "text", content: firstPrompt })`,
+		`case "session_created":`, `pendingFirstPrompt`, `case "text_accepted":`,
+		`requestId: state.pendingFirstPrompt.requestId`, `deliverPendingFirstPrompt()`,
+		`state.supportsTextAck = Number.parseInt(msg.protocolVersion || "1", 10) >= 2`,
+		`if (delivered && !state.supportsTextAck)`,
 	} {
 		if !strings.Contains(js, marker) {
 			t.Errorf("draft state machine missing %q", marker)
@@ -218,11 +221,20 @@ func TestChatScriptExposesCodeAfarBridgeWithLegacyAlias(t *testing.T) {
 	for _, marker := range []string{
 		`window.codeAfar = bridge`, `window.claudePhone = window.codeAfar`,
 		`async function chooseProjectDirectory()`, `window.codeAfarNative?.chooseDirectory`,
-		`fetch("/desktop/projects"`,
+		`fetch("/desktop/projects"`, `"X-CodeAfar-Admin-Token": token`,
 	} {
 		if !strings.Contains(js, marker) {
 			t.Errorf("CodeAfar bridge/folder picker missing %q", marker)
 		}
+	}
+}
+
+func TestPermissionSelectorTracksOnlyConfirmedMode(t *testing.T) {
+	jsBytes, err := fs.ReadFile(Assets, "chat/chat.js")
+	if err != nil { t.Fatal(err) }
+	js := string(jsBytes)
+	for _, marker := range []string{`pendingPermission`, `permissionSelect.value = state.selectedSession?.permissionMode`, `state.pendingPermission = null`} {
+		if !strings.Contains(js, marker) { t.Errorf("permission rollback missing %q", marker) }
 	}
 }
 

@@ -110,6 +110,8 @@ func TestApplicationDesktopProjectEndpointUsesCurrentEngine(t *testing.T) {
 	directory := t.TempDir()
 	request := httptest.NewRequest(http.MethodPost, "/desktop/projects", strings.NewReader(`{"path":`+strconv.Quote(directory)+`}`))
 	request.RemoteAddr = "127.0.0.1:1234"
+	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set("X-CodeAfar-Admin-Token", "token")
 	response := httptest.NewRecorder()
 
 	app.Handler().ServeHTTP(response, request)

@@ -1,6 +1,7 @@
 package engine
 
 import (
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"net"
@@ -27,6 +28,8 @@ type Engine struct {
 	mu                 sync.RWMutex
 	resumeMu           sync.Mutex
 	createMu           sync.Mutex
+	textMu             sync.Mutex
+	permissionMu       sync.Mutex
 	clients            map[string]*client
 	procs              map[string]claudeProc
 	projects           *projectStore
@@ -46,7 +49,10 @@ type Engine struct {
 	busy               map[string]bool
 	queueSeq           uint64
 	createRequests     map[string]createResult
+	textRequests       map[string][sha256.Size]byte
+	textRequestOrder   map[string][]string
 	pendingPermissions map[string]string
+	updateSession      func(*session.Session) error
 }
 
 type createResult struct {
@@ -76,9 +82,12 @@ func New(cfg Config) *Engine {
 		queues:             map[string][]queuedPrompt{},
 		busy:               map[string]bool{},
 		createRequests:     map[string]createResult{},
+		textRequests:       map[string][sha256.Size]byte{},
+		textRequestOrder:   map[string][]string{},
 		pendingPermissions: map[string]string{},
 	}
 	e.providers = provider.NewRegistry(provider.NewClaudeAdapter(cfg.ClaudeBin))
+	e.updateSession = e.history.UpdateSession
 	if persisted, err := e.history.Restore(); err == nil {
 		for _, sess := range persisted {
 			sess.SetSender(e.send)

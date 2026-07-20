@@ -7,7 +7,7 @@ import (
 	"encoding/json"
 )
 
-const ProtocolVersion = "1"
+const ProtocolVersion = "2"
 
 // 消息 type 常量（手机→Mac 与 Mac→手机 合并列出）。
 const (
@@ -36,6 +36,7 @@ const (
 	TypePong              = "pong"
 	TypeHealth            = "health"
 	TypePermissionChanged = "permission_changed"
+	TypeTextAccepted      = "text_accepted"
 )
 
 // control action 常量。
@@ -67,6 +68,7 @@ const (
 	CodeClaudeVersionMismatch = "CLAUDE_VERSION_MISMATCH"
 	CodeProviderNotAvailable  = "PROVIDER_NOT_AVAILABLE"
 	CodeInvalidPermission     = "INVALID_PERMISSION_MODE"
+	CodeRequestIDConflict     = "REQUEST_ID_CONFLICT"
 )
 
 // Envelope 是所有入站消息的第一层解析结果。
@@ -111,8 +113,15 @@ type ControlMsg struct {
 }
 
 type TextMsg struct {
-	Type    string `json:"type"`
-	Content string `json:"content"`
+	Type      string `json:"type"`
+	Content   string `json:"content"`
+	RequestID string `json:"requestId,omitempty"`
+}
+
+type TextAcceptedMsg struct {
+	Type      string `json:"type"`
+	SessionID string `json:"sessionId"`
+	RequestID string `json:"requestId"`
 }
 
 // ---- 出站消息 ----

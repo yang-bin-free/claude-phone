@@ -76,6 +76,12 @@ func (s *Session) SetPermission(permission string) {
 	s.mu.Unlock()
 }
 
+func (s *Session) PermissionMode() string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.Permission
+}
+
 // Subscribers 返回当前订阅者设备 ID 列表（快照）。
 func (s *Session) Subscribers() []string {
 	s.mu.RLock()

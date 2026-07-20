@@ -13,6 +13,15 @@ type queuedPrompt struct {
 }
 
 func (e *Engine) handleProcOutput(sess *session.Session, proc claudeProc, payload []byte) {
+	if currentSession, ok := e.manager.Get(sess.ID); !ok || currentSession != sess {
+		return
+	}
+	e.mu.RLock()
+	currentProcess, registered := e.procs[sess.ID]
+	e.mu.RUnlock()
+	if registered && currentProcess != proc {
+		return
+	}
 	e.recordActivity(sess.ID)
 	translated := translateClaudeOutput(payload)
 	for _, message := range translated {

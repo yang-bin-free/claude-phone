@@ -16,6 +16,7 @@ struct ChatView: View {
         }
         .navigationTitle(session.name)
         .toolbar { Button(role: .destructive) { app.sessions.stop(session.sessionId) } label: { Image(systemName: "stop.circle") } }
+        .onDisappear { Task { await app.speech.stop() } }
     }
 
     private var speechStatus: String? {

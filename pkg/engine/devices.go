@@ -9,6 +9,7 @@ import (
 	"sync"
 
 	"github.com/yang-bin-free/claude-phone/pkg/adminproto"
+	"github.com/yang-bin-free/claude-phone/pkg/product"
 	"gopkg.in/yaml.v3"
 )
 
@@ -31,8 +32,17 @@ func newDeviceStore(dataDir string) *deviceStore {
 }
 
 func GenerateDeviceCredential(dataDir, name string) (adminproto.DeviceCredential, error) {
-	cfg := Config{DataDir: dataDir}.withDefaults()
-	return newDeviceStore(cfg.DataDir).Add(name)
+	if dataDir == "" {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return adminproto.DeviceCredential{}, err
+		}
+		dataDir, _, err = product.ResolveDataDir(home, "")
+		if err != nil {
+			return adminproto.DeviceCredential{}, err
+		}
+	}
+	return newDeviceStore(dataDir).Add(name)
 }
 
 func (s *deviceStore) Add(name string) (adminproto.DeviceCredential, error) {

@@ -1,6 +1,7 @@
 package engine
 
 import (
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -80,8 +81,11 @@ func (e *Engine) HandleWS(w http.ResponseWriter, r *http.Request) {
 			}
 			currentSession = id
 		case protocol.TypeText, protocol.TypeVoice:
-			if err := e.handleText(currentSession, env.Raw); err != nil {
+			requestID, err := e.handleText(currentSession, env.Raw)
+			if err != nil {
 				_ = cl.writeJSON(errorFor(err))
+			} else if requestID != "" {
+				_ = cl.writeJSON(protocol.TextAcceptedMsg{Type: protocol.TypeTextAccepted, SessionID: currentSession, RequestID: requestID})
 			}
 		default:
 			_ = cl.writeJSON(protocol.NewError("UNKNOWN_MESSAGE", "unknown message type"))
@@ -259,6 +263,8 @@ func (e *Engine) handleControl(cl *client, currentSession string, raw []byte) (s
 }
 
 func (e *Engine) stopSession(s *session.Session) error {
+	e.permissionMu.Lock()
+	defer e.permissionMu.Unlock()
 	e.mu.RLock()
 	proc := e.procs[s.ID]
 	e.mu.RUnlock()
@@ -273,18 +279,25 @@ func (e *Engine) stopSession(s *session.Session) error {
 		return err
 	}
 	s.Broadcast(b)
+	e.manager.Remove(s.ID)
 	e.mu.Lock()
 	delete(e.procs, s.ID)
 	delete(e.activity, s.ID)
 	delete(e.healthState, s.ID)
 	delete(e.queues, s.ID)
 	delete(e.busy, s.ID)
+	delete(e.pendingPermissions, s.ID)
 	idle := len(e.procs) == 0
 	e.mu.Unlock()
+	e.textMu.Lock()
+	for _, key := range e.textRequestOrder[s.ID] {
+		delete(e.textRequests, key)
+	}
+	delete(e.textRequestOrder, s.ID)
+	e.textMu.Unlock()
 	if idle {
 		_ = e.power.Release()
 	}
-	e.manager.Remove(s.ID)
 	return nil
 }
 
@@ -340,7 +353,7 @@ func (e *Engine) createSession(cl *client, msg protocol.ControlMsg) (string, err
 		e.mu.RUnlock()
 		if exists {
 			if prior.signature != signature {
-				return "", errors.New("requestId was already used with different session parameters")
+				return "", errRequestIDConflict
 			}
 			return prior.message.SessionID, cl.writeJSON(prior.message)
 		}
@@ -379,7 +392,7 @@ func (e *Engine) createSession(cl *client, msg protocol.ControlMsg) (string, err
 
 	created := protocol.SessionCreatedMsg{
 		Type: protocol.TypeSessionCreated, SessionID: s.ID, Name: s.Name, Cwd: s.Cwd,
-		Provider: s.Provider, Model: s.Model, PermissionMode: s.Permission, RequestID: msg.RequestID,
+		Provider: s.Provider, Model: s.Model, PermissionMode: s.PermissionMode(), RequestID: msg.RequestID,
 	}
 	if msg.RequestID != "" {
 		e.mu.Lock()
@@ -407,7 +420,7 @@ func (e *Engine) resumeSession(s *session.Session) error {
 		return errProviderNotAvailable
 	}
 	proc := adapter.NewProcess(provider.SessionConfig{
-		Cwd: s.Cwd, SessionID: s.ID, Permission: s.Permission, Model: s.Model,
+		Cwd: s.Cwd, SessionID: s.ID, Permission: s.PermissionMode(), Model: s.Model,
 		AddDirs: []string{s.Cwd}, Resume: e.sessionExists(s.Cwd, s.ID),
 		AllowedTools: e.permissions.AllowedTools(),
 	})
@@ -426,22 +439,34 @@ func (e *Engine) resumeSession(s *session.Session) error {
 	return nil
 }
 
-func (e *Engine) handleText(sessionID string, raw []byte) error {
+func (e *Engine) handleText(sessionID string, raw []byte) (string, error) {
 	if sessionID == "" {
-		return session.ErrSessionNotFound
+		return "", session.ErrSessionNotFound
 	}
 	var msg protocol.TextMsg
 	if err := json.Unmarshal(raw, &msg); err != nil {
-		return err
+		return "", err
+	}
+	e.textMu.Lock()
+	defer e.textMu.Unlock()
+	requestKey := sessionID + "\x00" + msg.RequestID
+	requestSignature := sha256.Sum256([]byte(msg.Content))
+	if msg.RequestID != "" {
+		if previous, ok := e.textRequests[requestKey]; ok {
+			if previous != requestSignature {
+				return "", errRequestIDConflict
+			}
+			return msg.RequestID, nil
+		}
 	}
 	if err := e.history.Append(sessionID, raw); err != nil {
-		return err
+		return "", err
 	}
 	e.mu.Lock()
 	proc := e.procs[sessionID]
 	if proc == nil {
 		e.mu.Unlock()
-		return session.ErrSessionNotFound
+		return "", session.ErrSessionNotFound
 	}
 	if e.busy[sessionID] {
 		e.queueSeq++
@@ -453,7 +478,10 @@ func (e *Engine) handleText(sessionID string, raw []byte) error {
 			payload, _ := json.Marshal(protocol.QueuedMsg{Type: protocol.TypeQueued, MsgID: queued.ID, Position: position})
 			s.Broadcast(payload)
 		}
-		return nil
+		if msg.RequestID != "" {
+			e.recordTextRequest(sessionID, requestKey, requestSignature)
+		}
+		return msg.RequestID, nil
 	}
 	e.busy[sessionID] = true
 	e.mu.Unlock()
@@ -461,9 +489,24 @@ func (e *Engine) handleText(sessionID string, raw []byte) error {
 		e.mu.Lock()
 		e.busy[sessionID] = false
 		e.mu.Unlock()
-		return err
+		return "", err
 	}
-	return nil
+	if msg.RequestID != "" {
+		e.recordTextRequest(sessionID, requestKey, requestSignature)
+	}
+	return msg.RequestID, nil
+}
+
+const maxTextRequestRecordsPerSession = 256
+
+func (e *Engine) recordTextRequest(sessionID, key string, signature [sha256.Size]byte) {
+	order := e.textRequestOrder[sessionID]
+	if len(order) >= maxTextRequestRecordsPerSession {
+		delete(e.textRequests, order[0])
+		order = order[1:]
+	}
+	e.textRequests[key] = signature
+	e.textRequestOrder[sessionID] = append(order, key)
 }
 
 func (e *Engine) sessionList(limit, offset int) protocol.SessionListMsg {
@@ -491,7 +534,7 @@ func (e *Engine) sessionList(limit, offset int) protocol.SessionListMsg {
 			Cwd:         s.Cwd,
 			Provider:    provider.NormalizeID(s.Provider),
 			Model:       s.Model,
-			Permission:  s.Permission,
+			Permission:  s.PermissionMode(),
 		})
 	}
 	return protocol.SessionListMsg{Type: protocol.TypeSessionList, Sessions: infos}
@@ -519,6 +562,7 @@ func (e *Engine) providerList() protocol.ProviderListMsg {
 var (
 	errProviderNotAvailable = errors.New("provider is not available")
 	errInvalidPermission    = errors.New("permission mode is not supported by provider")
+	errRequestIDConflict    = errors.New("request id was already used with different content")
 )
 
 func errorFor(err error) protocol.ErrorMsg {
@@ -533,6 +577,8 @@ func errorFor(err error) protocol.ErrorMsg {
 		return protocol.NewError(protocol.CodeProviderNotAvailable, err.Error())
 	case errors.Is(err, errInvalidPermission):
 		return protocol.NewError(protocol.CodeInvalidPermission, err.Error())
+	case errors.Is(err, errRequestIDConflict):
+		return protocol.NewError(protocol.CodeRequestIDConflict, err.Error())
 	default:
 		return protocol.NewError("ENGINE_ERROR", err.Error())
 	}

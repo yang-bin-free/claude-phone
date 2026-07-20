@@ -15,6 +15,7 @@ import (
 	"syscall"
 
 	"github.com/yang-bin-free/claude-phone/pkg/desktop"
+	"github.com/yang-bin-free/claude-phone/pkg/product"
 )
 
 func main() {
@@ -33,6 +34,14 @@ func main() {
 	if err := validateDesktopAddr(*desktopAddr); err != nil {
 		log.Fatal(err)
 	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		log.Fatal(err)
+	}
+	resolvedDataDir, _, err := product.ResolveDataDir(home, *dataDir)
+	if err != nil {
+		log.Fatalf("CodeAfar data migration failed: %v", err)
+	}
 	token, err := generateAdminToken()
 	if err != nil {
 		log.Fatal(err)
@@ -41,7 +50,7 @@ func main() {
 	defer stop()
 	app := newApplication(ctx, appConfig{
 		DesktopAddr: *desktopAddr, ClaudeBin: *claudeBin, DefaultWorkdir: *workdir,
-		DefaultPermission: *permission, DataDir: *dataDir, AdminToken: token,
+		DefaultPermission: *permission, DataDir: resolvedDataDir, AdminToken: token,
 	}, appDependencies{})
 	if err := app.Start(); err != nil {
 		log.Fatal(err)

@@ -81,6 +81,7 @@ func newApplication(parent context.Context, cfg appConfig, deps appDependencies)
 		AdminHandler:  app.adminHandler,
 		Status:        app.Status,
 		AddProject:    app.addProject,
+		AdminToken:    cfg.AdminToken,
 	})
 	return app
 }

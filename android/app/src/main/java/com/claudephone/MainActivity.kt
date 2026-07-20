@@ -191,6 +191,7 @@ class MainActivity : Activity() {
     }
 
     private fun disconnectAndShowSettings() {
+		speechController.destroy()
         stopService(Intent(this, IPNServiceImpl::class.java))
         showPairingScreen()
     }
@@ -229,6 +230,11 @@ class MainActivity : Activity() {
         currentWebView?.destroy()
         currentWebView = null
         super.onDestroy()
+    }
+
+    override fun onStop() {
+        speechController.destroy()
+        super.onStop()
     }
 
     companion object {

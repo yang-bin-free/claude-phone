@@ -63,10 +63,7 @@ func (c Config) withDefaults() Config {
 	}
 	if c.DataDir == "" {
 		if home, err := os.UserHomeDir(); err == nil {
-			c.DataDir, _, err = product.ResolveDataDir(home, "")
-			if err != nil {
-				c.DataDir = product.DefaultDataDir(home)
-			}
+			c.DataDir = product.DefaultDataDir(home)
 		} else {
 			c.DataDir = product.DataDirName
 		}

@@ -77,3 +77,19 @@ func TestResolveDataDirLeavesExplicitPathUntouched(t *testing.T) {
 		t.Fatalf("legacy directory was changed: %v", err)
 	}
 }
+
+func TestResolveDataDirReturnsMigrationFailure(t *testing.T) {
+	home := t.TempDir()
+	legacy := filepath.Join(home, LegacyDataDirName)
+	if err := os.Mkdir(legacy, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(home, 0o500); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(home, 0o700) })
+
+	if _, _, err := ResolveDataDir(home, ""); err == nil {
+		t.Fatal("expected migration error instead of a fresh data directory")
+	}
+}

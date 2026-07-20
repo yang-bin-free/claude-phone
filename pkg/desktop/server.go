@@ -1,8 +1,10 @@
 package desktop
 
 import (
+	"crypto/subtle"
 	"encoding/json"
 	"io/fs"
+	"mime"
 	"net"
 	"net/http"
 
@@ -23,6 +25,7 @@ type HandlerOptions struct {
 	AdminHandler  func() http.Handler
 	Status        func() AppStatus
 	AddProject    func(string) (protocol.ProjectInfo, error)
+	AdminToken    string
 }
 
 func NewHandler(options HandlerOptions) http.Handler {
@@ -38,7 +41,10 @@ func NewHandler(options HandlerOptions) http.Handler {
 		_ = json.NewEncoder(w).Encode(status)
 	})
 	mux.HandleFunc("POST /desktop/projects", func(w http.ResponseWriter, r *http.Request) {
-		if !isLoopbackRequest(r) {
+		mediaType, _, _ := mime.ParseMediaType(r.Header.Get("Content-Type"))
+		providedToken := r.Header.Get("X-CodeAfar-Admin-Token")
+		if !isLoopbackRequest(r) || mediaType != "application/json" || options.AdminToken == "" ||
+			subtle.ConstantTimeCompare([]byte(providedToken), []byte(options.AdminToken)) != 1 {
 			http.Error(w, "forbidden", http.StatusForbidden)
 			return
 		}

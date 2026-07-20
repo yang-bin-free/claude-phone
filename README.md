@@ -51,7 +51,7 @@ make build-agent
 
 ## 会话设计
 
-点击“新会话”只创建一个未提交草稿。用户从 Finder 选目录，按需修改 Provider 和权限，然后输入消息；第一次发送会以稳定的 `requestId` 创建会话，收到 `session_created` 后只发送一次消息。失败后重试复用同一个请求，避免重复会话。
+点击“新会话”只创建一个未提交草稿。用户从 Finder 选目录，按需修改 Provider 和权限，然后输入消息；第一次发送会以稳定的 `requestId` 创建会话，收到 `session_created` 后发送带同一消息 ID 的文本，并保留到服务端返回 `text_accepted`。断线后重试会由服务端去重，避免重复会话或重复执行首条消息。
 
 当前 Provider：
 

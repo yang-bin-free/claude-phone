@@ -24,6 +24,11 @@ func TestAndroidVoiceUsesOnlyOnDeviceRecognizer(t *testing.T) {
 	if !strings.Contains(activity, "OnDeviceSpeechController") || !strings.Contains(activity, "window.codeAfar.setVoiceText") {
 		t.Error("MainActivity does not connect on-device recognition to the CodeAfar composer")
 	}
+	for _, marker := range []string{"override fun onStop()", "speechController.destroy()", "disconnectAndShowSettings"} {
+		if !strings.Contains(activity, marker) {
+			t.Errorf("Android voice lifecycle missing %q", marker)
+		}
+	}
 }
 
 func TestIOSVoiceUsesOnlyOnDeviceRecognition(t *testing.T) {
@@ -42,6 +47,11 @@ func TestIOSVoiceUsesOnlyOnDeviceRecognition(t *testing.T) {
 	}
 	if strings.Contains(controller, "requiresOnDeviceRecognition = false") {
 		t.Error("iOS voice must not fall back to server recognition")
+	}
+	chat := readContractFile(t, repo, "ios/ClaudePhone/Views/ChatView.swift")
+	app := readContractFile(t, repo, "ios/ClaudePhone/ClaudePhoneApp.swift")
+	if !strings.Contains(chat, ".onDisappear") || !strings.Contains(app, "scenePhase") {
+		t.Error("iOS voice must stop when chat disappears or the app becomes inactive")
 	}
 }
 

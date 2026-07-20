@@ -2,6 +2,7 @@ package engine
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net"
 	"net/http/httptest"
@@ -162,6 +163,11 @@ func TestWebSocket_CreateSessionRequestIDIsIdempotent(t *testing.T) {
 	if len(adapter.configs) != 1 || len(e.manager.List()) != 1 {
 		t.Fatalf("processes=%d sessions=%d", len(adapter.configs), len(e.manager.List()))
 	}
+	request.Name = "different"
+	writeJSON(t, conn, request)
+	if got := readProtocolError(t, conn); got.Code != protocol.CodeRequestIDConflict {
+		t.Fatalf("error=%+v", got)
+	}
 }
 
 func TestWebSocket_CreateSessionRejectsUnknownProvider(t *testing.T) {
@@ -229,6 +235,58 @@ func TestWebSocket_PermissionChangeRestartsIdleSessionAndPersists(t *testing.T) 
 	}
 }
 
+func TestWebSocket_TextRequestIsAcknowledgedAndDeduplicated(t *testing.T) {
+	e := New(Config{DataDir: t.TempDir(), DefaultWorkingDir: ".", DeviceTokens: map[string]string{"device": "Mac"}})
+	adapter := &recordingAdapter{id: provider.ClaudeID}
+	e.SetProviderRegistry(provider.NewRegistry(adapter))
+	server, conn := openAuthenticatedEngine(t, e, "device")
+	defer server.Close()
+	defer conn.Close()
+	writeJSON(t, conn, protocol.ControlMsg{Type: protocol.TypeControl, Action: protocol.ActionCreateSession, WorkingDir: ".", PermissionMode: "default"})
+	created := readSessionCreated(t, conn)
+
+	message := protocol.TextMsg{Type: protocol.TypeText, Content: "你好", RequestID: "first-prompt"}
+	writeJSON(t, conn, message)
+	assertTextAccepted(t, conn, created.SessionID, message.RequestID)
+	writeJSON(t, conn, message)
+	assertTextAccepted(t, conn, created.SessionID, message.RequestID)
+	if got := adapter.processes[0].sent; len(got) != 1 || got[0] != "你好" {
+		t.Fatalf("sent=%v", got)
+	}
+
+	writeJSON(t, conn, protocol.TextMsg{Type: protocol.TypeText, Content: "different", RequestID: message.RequestID})
+	if got := readProtocolError(t, conn); got.Code != protocol.CodeRequestIDConflict {
+		t.Fatalf("error=%+v", got)
+	}
+}
+
+func TestTextRequestDedupeIsBoundedAndClearedOnStop(t *testing.T) {
+	e := New(Config{DataDir: t.TempDir()})
+	sess := session.NewSession("session", "Demo", t.TempDir(), "owner")
+	e.manager.Restore(sess)
+	proc := &recordingProcess{}
+	e.procs[sess.ID] = proc
+	e.busy[sess.ID] = true
+	for index := 0; index < maxTextRequestRecordsPerSession+20; index++ {
+		payload, err := json.Marshal(protocol.TextMsg{Type: protocol.TypeText, Content: "prompt", RequestID: fmt.Sprintf("request-%d", index)})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := e.handleText(sess.ID, payload); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if len(e.textRequests) != maxTextRequestRecordsPerSession || len(e.textRequestOrder[sess.ID]) != maxTextRequestRecordsPerSession {
+		t.Fatalf("records=%d order=%d", len(e.textRequests), len(e.textRequestOrder[sess.ID]))
+	}
+	if err := e.stopSession(sess); err != nil {
+		t.Fatal(err)
+	}
+	if len(e.textRequests) != 0 || len(e.textRequestOrder) != 0 {
+		t.Fatalf("dedupe records survived stop: records=%d sessions=%d", len(e.textRequests), len(e.textRequestOrder))
+	}
+}
+
 func TestWebSocket_PermissionChangeWhileBusyIsAppliedAfterDone(t *testing.T) {
 	e := New(Config{DataDir: t.TempDir(), DefaultWorkingDir: ".", DeviceTokens: map[string]string{"device": "Mac"}})
 	adapter := &recordingAdapter{id: provider.ClaudeID, permissions: []string{"default", "plan"}}
@@ -251,6 +309,81 @@ func TestWebSocket_PermissionChangeWhileBusyIsAppliedAfterDone(t *testing.T) {
 	changed := readPermissionChanged(t, conn)
 	if changed.Pending || changed.PermissionMode != "plan" || len(adapter.configs) != 2 {
 		t.Fatalf("changed=%+v configs=%d", changed, len(adapter.configs))
+	}
+}
+
+func TestPermissionChangeStartFailureKeepsOriginalProcessAndMode(t *testing.T) {
+	e := New(Config{DataDir: t.TempDir()})
+	adapter := &recordingAdapter{id: provider.ClaudeID, permissions: []string{"default", "plan"}, startErrors: []error{nil, errors.New("start failed")}}
+	e.SetProviderRegistry(provider.NewRegistry(adapter))
+	sess := session.NewSession("session", "Demo", t.TempDir(), "owner")
+	sess.Permission = "default"
+	e.manager.Restore(sess)
+	old := adapter.NewProcess(provider.SessionConfig{Permission: "default"}).(*recordingProcess)
+	if err := old.Start(); err != nil {
+		t.Fatal(err)
+	}
+	e.procs[sess.ID] = old
+
+	if err := e.applyPermissionChange(sess, "plan"); err == nil {
+		t.Fatal("expected replacement start failure")
+	}
+	if e.procs[sess.ID] != old || old.stopCalls != 0 || sess.Permission != "default" {
+		t.Fatalf("process=%p old=%p stops=%d permission=%s", e.procs[sess.ID], old, old.stopCalls, sess.Permission)
+	}
+}
+
+func TestPermissionChangePersistenceFailureRollsBackBeforeSwap(t *testing.T) {
+	e := New(Config{DataDir: t.TempDir()})
+	adapter := &recordingAdapter{id: provider.ClaudeID, permissions: []string{"default", "plan"}}
+	e.SetProviderRegistry(provider.NewRegistry(adapter))
+	sess := session.NewSession("session", "Demo", t.TempDir(), "owner")
+	sess.Permission = "default"
+	e.manager.Restore(sess)
+	old := adapter.NewProcess(provider.SessionConfig{Permission: "default"}).(*recordingProcess)
+	e.procs[sess.ID] = old
+	e.updateSession = func(*session.Session) error { return errors.New("disk full") }
+
+	if err := e.applyPermissionChange(sess, "plan"); err == nil {
+		t.Fatal("expected persistence failure")
+	}
+	newProcess := adapter.processes[len(adapter.processes)-1]
+	if e.procs[sess.ID] != old || old.stopCalls != 0 || newProcess.stopCalls != 1 || sess.Permission != "default" {
+		t.Fatalf("oldStops=%d newStops=%d permission=%s", old.stopCalls, newProcess.stopCalls, sess.Permission)
+	}
+}
+
+func TestStopDuringPermissionTransitionCannotRestartSession(t *testing.T) {
+	e := New(Config{DataDir: t.TempDir()})
+	started := make(chan struct{})
+	release := make(chan struct{})
+	adapter := &recordingAdapter{
+		id: provider.ClaudeID, permissions: []string{"default", "plan"},
+		startHooks: []func() error{nil, func() error { close(started); <-release; return nil }},
+	}
+	e.SetProviderRegistry(provider.NewRegistry(adapter))
+	sess := session.NewSession("session", "Demo", t.TempDir(), "owner")
+	sess.Permission = "default"
+	e.manager.Restore(sess)
+	old := adapter.NewProcess(provider.SessionConfig{Permission: "default"}).(*recordingProcess)
+	e.procs[sess.ID] = old
+	permissionDone := make(chan error, 1)
+	stopDone := make(chan error, 1)
+	go func() { permissionDone <- e.applyPermissionChange(sess, "plan") }()
+	<-started
+	go func() { stopDone <- e.stopSession(sess) }()
+	close(release)
+	if err := <-permissionDone; err != nil {
+		t.Fatal(err)
+	}
+	if err := <-stopDone; err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := e.manager.Get(sess.ID); ok {
+		t.Fatal("stopped session remains managed")
+	}
+	if _, ok := e.procs[sess.ID]; ok {
+		t.Fatal("permission transition reinstalled a stopped process")
 	}
 }
 
@@ -421,11 +554,28 @@ func readPermissionChanged(t *testing.T, conn *websocket.Conn) protocol.Permissi
 	return got
 }
 
+func assertTextAccepted(t *testing.T, conn *websocket.Conn, sessionID, requestID string) {
+	t.Helper()
+	_, payload, err := conn.ReadMessage()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got protocol.TextAcceptedMsg
+	if err := json.Unmarshal(payload, &got); err != nil {
+		t.Fatal(err)
+	}
+	if got.Type != protocol.TypeTextAccepted || got.SessionID != sessionID || got.RequestID != requestID {
+		t.Fatalf("accepted=%s", payload)
+	}
+}
+
 type recordingAdapter struct {
 	id          string
 	permissions []string
 	configs     []provider.SessionConfig
 	processes   []*recordingProcess
+	startErrors []error
+	startHooks  []func() error
 }
 
 func (a *recordingAdapter) Descriptor() provider.Descriptor {
@@ -445,7 +595,15 @@ func (a *recordingAdapter) Descriptor() provider.Descriptor {
 
 func (a *recordingAdapter) NewProcess(config provider.SessionConfig) provider.Process {
 	a.configs = append(a.configs, config)
-	process := &recordingProcess{}
+	var startErr error
+	if index := len(a.processes); index < len(a.startErrors) {
+		startErr = a.startErrors[index]
+	}
+	var startHook func() error
+	if index := len(a.processes); index < len(a.startHooks) {
+		startHook = a.startHooks[index]
+	}
+	process := &recordingProcess{startErr: startErr, startHook: startHook}
 	a.processes = append(a.processes, process)
 	return process
 }
@@ -454,12 +612,19 @@ type recordingProcess struct {
 	onOutput  session.OutputFunc
 	stopCalls int
 	sent      []string
+	startErr  error
+	startHook func() error
 }
 
 func (p *recordingProcess) OnOutput(fn session.OutputFunc) { p.onOutput = fn }
-func (p *recordingProcess) Start() error                   { return nil }
-func (p *recordingProcess) Send(text string) error         { p.sent = append(p.sent, text); return nil }
-func (p *recordingProcess) Stop() error                    { p.stopCalls++; return nil }
+func (p *recordingProcess) Start() error {
+	if p.startHook != nil {
+		return p.startHook()
+	}
+	return p.startErr
+}
+func (p *recordingProcess) Send(text string) error { p.sent = append(p.sent, text); return nil }
+func (p *recordingProcess) Stop() error            { p.stopCalls++; return nil }
 
 func TestHandleControl_LeaveSession(t *testing.T) {
 	e := New(Config{})

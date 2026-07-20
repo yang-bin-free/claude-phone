@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/yang-bin-free/claude-phone/pkg/engine"
+	"github.com/yang-bin-free/claude-phone/pkg/product"
 )
 
 func main() {
@@ -34,6 +35,14 @@ func runServe(args []string) {
 	cfg, network, err := parseServeConfig(args)
 	if err != nil {
 		log.Fatal(err)
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		log.Fatal(err)
+	}
+	cfg.DataDir, _, err = product.ResolveDataDir(home, cfg.DataDir)
+	if err != nil {
+		log.Fatalf("CodeAfar data migration failed: %v", err)
 	}
 	version, err := engine.DetectClaudeVersion(cfg.ClaudeBin)
 	if err != nil {

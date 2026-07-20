@@ -57,9 +57,27 @@ func TestMacInstallerVerifiesAndLaunchesInstalledBundle(t *testing.T) {
 		"pkill -x claude-phone",
 		"installed_pid",
 		"-iTCP:9877 -sTCP:LISTEN",
+		"/desktop/status",
+		`"ready":true`,
+		"com.claude.phone.plist",
+		"Claude Phone.app",
+		"legacy_app_backup",
+		"legacy_plist_backup",
+		`launchctl bootstrap "gui/${UID}" "${legacy_plist}"`,
 	} {
 		if !strings.Contains(text, marker) {
 			t.Errorf("Mac installer missing %q", marker)
 		}
+	}
+}
+
+func TestReleasePackagingRemovesStaleArtifacts(t *testing.T) {
+	repo := filepath.Clean(filepath.Join("..", ".."))
+	b, err := os.ReadFile(filepath.Join(repo, "scripts/package-release.sh"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(b), `rm -rf "${release_dir}"`) {
+		t.Fatal("release packaging can include stale artifacts from an older version")
 	}
 }

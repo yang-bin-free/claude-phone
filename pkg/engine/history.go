@@ -50,7 +50,7 @@ func (s *historyStore) writeSessionLocked(sess *session.Session) error {
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return err
 	}
-	meta := sessionMeta{SessionID: sess.ID, Name: sess.Name, Cwd: sess.Cwd, Owner: sess.Owner, Permission: sess.Permission, Provider: sess.Provider, Model: sess.Model, CreatedAt: sess.CreatedAt}
+	meta := sessionMeta{SessionID: sess.ID, Name: sess.Name, Cwd: sess.Cwd, Owner: sess.Owner, Permission: sess.PermissionMode(), Provider: sess.Provider, Model: sess.Model, CreatedAt: sess.CreatedAt}
 	b, err := json.MarshalIndent(meta, "", "  ")
 	if err != nil {
 		return err

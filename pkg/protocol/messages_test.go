@@ -90,7 +90,7 @@ func TestHelloMsg_RoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatalf("marshal: %v", err)
 	}
-	want := `{"type":"hello","agentVersion":"0.1.0","claudeVersion":"2.1.186","protocolVersion":"1"}`
+	want := `{"type":"hello","agentVersion":"0.1.0","claudeVersion":"2.1.186","protocolVersion":"2"}`
 	if string(b) != want {
 		t.Fatalf("got %s want %s", b, want)
 	}

@@ -37,6 +37,8 @@ final class SpeechController {
     private let engineFactory: @MainActor () -> any OnDeviceSpeechEngine
     private let authorize: () async -> Bool
     private var activeEngine: (any OnDeviceSpeechEngine)?
+    private var starting = false
+    private var generation = 0
     var onText: ((String) -> Void)?
 
     init(
@@ -52,52 +54,81 @@ final class SpeechController {
             await stop()
             return
         }
+        guard !starting else { return }
+        starting = true
+        generation += 1
+        let startGeneration = generation
 
         state = .requestingPermission
         guard await authorize() else {
+            guard generation == startGeneration else { return }
+            starting = false
             state = .denied
             return
         }
+        guard generation == startGeneration, starting else { return }
 
         state = .preparing
         let engine = engineFactory()
+        activeEngine = engine
+        let engineID = ObjectIdentifier(engine)
         guard await engine.isAvailable else {
+            guard generation == startGeneration else { await engine.stop(); return }
+            activeEngine = nil
+            starting = false
+            await engine.stop()
             state = .unavailable("当前设备或语言不支持离线语音输入")
             return
         }
 
-        activeEngine = engine
         do {
             try await engine.start(
-                onText: { [weak self] text in self?.onText?(text) },
+                onText: { [weak self] text in
+                    self?.acceptText(text, engineID: engineID, generation: startGeneration)
+                },
                 onFinish: { [weak self] error in
-                    Task { @MainActor in await self?.finish(error: error) }
+                    Task { @MainActor in
+                        await self?.finish(engineID: engineID, generation: startGeneration, error: error)
+                    }
                 }
             )
+            guard generation == startGeneration, starting else { await engine.stop(); return }
+            starting = false
             state = .listening
         } catch {
+            await engine.stop()
+            guard generation == startGeneration else { return }
             activeEngine = nil
+            starting = false
             state = .failed(error.localizedDescription)
         }
     }
 
     func stop() async {
+        generation += 1
+        starting = false
         let engine = activeEngine
         activeEngine = nil
         await engine?.stop()
         state = .idle
     }
 
-    private func finish(error: Error?) async {
-        guard activeEngine != nil else { return }
+    private func finish(engineID: ObjectIdentifier, generation callbackGeneration: Int, error: Error?) async {
+        guard generation == callbackGeneration, let activeEngine, ObjectIdentifier(activeEngine) == engineID else { return }
         let engine = activeEngine
-        activeEngine = nil
-        await engine?.stop()
+        self.activeEngine = nil
+        starting = false
+        await engine.stop()
         if let error {
             state = .failed(error.localizedDescription)
         } else {
             state = .idle
         }
+    }
+
+    private func acceptText(_ text: String, engineID: ObjectIdentifier, generation callbackGeneration: Int) {
+        guard generation == callbackGeneration, let activeEngine, ObjectIdentifier(activeEngine) == engineID else { return }
+        onText?(text)
     }
 
     private static func requestAuthorization() async -> Bool {

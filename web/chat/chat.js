@@ -4,7 +4,8 @@
     assistantChunk: null, pendingTokens: "", tokenFrame: 0,
     sessions: [], projects: [], providers: [], templates: [],
     engineReady: false, connected: false, sessionReady: false,
-    draft: null, selectedSession: null, voiceBase: ""
+    draft: null, selectedSession: null, pendingFirstPrompt: null, pendingPermission: null,
+    supportsTextAck: false, voiceBase: ""
   };
   const messages = document.querySelector("#messages");
   const connection = document.querySelector("#connection-state");
@@ -264,7 +265,7 @@
       const path = await window.codeAfarNative.chooseDirectory();
       if (!path) return;
       const response = await fetch("/desktop/projects", {
-        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ path })
+        method: "POST", headers: { "Content-Type": "application/json", "X-CodeAfar-Admin-Token": token }, body: JSON.stringify({ path })
       });
       if (!response.ok) throw new Error((await response.text()).trim() || `状态 ${response.status}`);
       const project = await response.json();
@@ -372,6 +373,24 @@
     });
   }
 
+  function deliverPendingFirstPrompt() {
+    if (!state.pendingFirstPrompt || state.pendingFirstPrompt.sessionId !== state.sessionId) return false;
+    const delivered = send({
+      type: "text", content: state.pendingFirstPrompt.content,
+      requestId: state.pendingFirstPrompt.requestId
+    });
+    if (delivered && !state.pendingFirstPrompt.displayed) {
+      append("user", state.pendingFirstPrompt.content);
+      state.pendingFirstPrompt.displayed = true;
+    }
+    if (delivered && !state.supportsTextAck) {
+      state.pendingFirstPrompt = null;
+      draftStatus.textContent = "";
+    }
+    if (!delivered) draftStatus.textContent = "连接中断，重连后将继续发送";
+    return delivered;
+  }
+
   function showProtocolError(msg) {
     if (msg.code === "DEVICE_NOT_AUTHORIZED") {
       showBanner(`${msg.code}: ${msg.message}`);
@@ -387,6 +406,11 @@
       updateControls();
       return;
     }
+    if (state.pendingPermission) {
+      permissionSelect.value = state.selectedSession?.permissionMode || state.pendingPermission.confirmed;
+      state.pendingPermission = null;
+      draftStatus.textContent = "权限更新失败，已恢复原设置";
+    }
     append("error", `${msg.code}: ${msg.message}`);
   }
 
@@ -399,6 +423,7 @@
     }
     switch (msg.type) {
       case "hello":
+        state.supportsTextAck = Number.parseInt(msg.protocolVersion || "1", 10) >= 2;
         send({ type: "control", action: "list_sessions", limit: 100 });
         send({ type: "control", action: "list_projects" });
         send({ type: "control", action: "list_providers" });
@@ -406,6 +431,7 @@
         if (state.sessionId) {
           send({ type: "control", action: "select_session", sessionId: state.sessionId });
           send({ type: "control", action: "load_history", sessionId: state.sessionId, limit: 500 });
+          deliverPendingFirstPrompt();
         } else if (state.draft?.status === "creating") {
           sendCreateRequest();
         }
@@ -417,6 +443,7 @@
       case "session_created": {
         if (state.draft && msg.requestId && msg.requestId !== state.draft.requestId) break;
         const firstPrompt = state.draft?.firstPrompt || "";
+        const firstPromptRequestID = state.draft?.requestId || msg.requestId;
         state.draft = null;
         state.sessionId = msg.sessionId;
         state.sessionReady = true;
@@ -441,13 +468,22 @@
         draftStatus.textContent = "";
         showBanner("");
         if (firstPrompt) {
-          append("user", firstPrompt);
-          send({ type: "text", content: firstPrompt });
+          state.pendingFirstPrompt = {
+            sessionId: msg.sessionId, content: firstPrompt,
+            requestId: firstPromptRequestID, displayed: false
+          };
+          deliverPendingFirstPrompt();
         }
         send({ type: "control", action: "list_sessions", limit: 100 });
         updateControls();
         break;
       }
+      case "text_accepted":
+        if (state.pendingFirstPrompt?.sessionId === msg.sessionId && state.pendingFirstPrompt.requestId === msg.requestId) {
+          state.pendingFirstPrompt = null;
+          draftStatus.textContent = "";
+        }
+        break;
       case "project_list":
         state.projects = msg.projects || [];
         renderProjectOptions();
@@ -507,6 +543,9 @@
           if (!msg.pending) {
             permissionSelect.value = msg.permissionMode;
             if (state.selectedSession) state.selectedSession.permissionMode = msg.permissionMode;
+            state.pendingPermission = null;
+          } else {
+            permissionSelect.value = state.selectedSession?.permissionMode || "default";
           }
           draftStatus.textContent = msg.pending ? "将在本轮结束后应用" : "权限已更新";
         }
@@ -628,7 +667,14 @@
       return;
     }
     if (!isDraft() && state.sessionId) {
-      send({ type: "control", action: "set_permission_mode", sessionId: state.sessionId, permissionMode: permissionSelect.value });
+      const requested = permissionSelect.value;
+      const confirmed = state.selectedSession?.permissionMode || "default";
+      state.pendingPermission = { requested, confirmed };
+      permissionSelect.value = confirmed;
+      if (!send({ type: "control", action: "set_permission_mode", sessionId: state.sessionId, permissionMode: requested })) {
+        state.pendingPermission = null;
+        draftStatus.textContent = "连接中断，权限未更改";
+      }
     }
     updateControls();
   });

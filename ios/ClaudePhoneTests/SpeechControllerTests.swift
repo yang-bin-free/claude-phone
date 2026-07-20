@@ -56,6 +56,63 @@ final class SpeechControllerTests: XCTestCase {
         XCTAssertEqual(controller.state, .idle)
     }
 
+    func testFailedStartCleansUpPartiallyStartedEngine() async {
+        let fake = FakeOnDeviceSpeechEngine(startError: TestError.failed)
+        let controller = SpeechController(engineFactory: { fake }, authorize: { true })
+
+        await controller.start()
+
+        XCTAssertEqual(fake.startCount, 1)
+        XCTAssertEqual(fake.stopCount, 1)
+        if case .failed = controller.state {} else { XCTFail("expected failed state") }
+    }
+
+    func testConcurrentStartsCreateOnlyOneEngine() async {
+        let fake = FakeOnDeviceSpeechEngine()
+        let gate = AuthorizationGate()
+        let controller = SpeechController(engineFactory: { fake }, authorize: { await gate.wait() })
+
+        async let first: Void = controller.start()
+        async let second: Void = controller.start()
+        await gate.open()
+        _ = await (first, second)
+
+        XCTAssertEqual(fake.startCount, 1)
+    }
+
+    func testStaleFinishCannotStopNewRecording() async {
+        let first = FakeOnDeviceSpeechEngine()
+        let second = FakeOnDeviceSpeechEngine()
+        var engines: [FakeOnDeviceSpeechEngine] = [first, second]
+        let controller = SpeechController(engineFactory: { engines.removeFirst() }, authorize: { true })
+        await controller.start()
+        await controller.stop()
+        await controller.start()
+
+        first.emitFinish()
+        await Task.yield()
+
+        XCTAssertEqual(second.stopCount, 0)
+        XCTAssertEqual(controller.state, .listening)
+    }
+
+    func testStaleTextCannotOverwriteNewRecording() async {
+        let first = FakeOnDeviceSpeechEngine()
+        let second = FakeOnDeviceSpeechEngine()
+        var engines: [FakeOnDeviceSpeechEngine] = [first, second]
+        let controller = SpeechController(engineFactory: { engines.removeFirst() }, authorize: { true })
+        var values: [String] = []
+        controller.onText = { values.append($0) }
+        await controller.start()
+        await controller.stop()
+        await controller.start()
+
+        first.emit("过期文本")
+        second.emit("当前文本")
+
+        XCTAssertEqual(values, ["当前文本"])
+    }
+
     func testFactoryRoutesIOS26ToSpeechAnalyzer() {
         XCTAssertEqual(SpeechEngineKind.forMajorVersion(25), .legacyOnDevice)
         XCTAssertEqual(SpeechEngineKind.forMajorVersion(26), .speechAnalyzer)
@@ -72,15 +129,22 @@ private final class FakeOnDeviceSpeechEngine: OnDeviceSpeechEngine {
     let available: Bool
     var startCount = 0
     var stopCount = 0
+    let startError: Error?
     private var onText: ((String) -> Void)?
+    private var onFinish: ((Error?) -> Void)?
 
-    init(available: Bool = true) { self.available = available }
+    init(available: Bool = true, startError: Error? = nil) {
+        self.available = available
+        self.startError = startError
+    }
 
     var isAvailable: Bool { get async { available } }
 
     func start(onText: @escaping (String) -> Void, onFinish: @escaping (Error?) -> Void) async throws {
         startCount += 1
+        if let startError { throw startError }
         self.onText = onText
+        self.onFinish = onFinish
     }
 
     func stop() async {
@@ -88,4 +152,17 @@ private final class FakeOnDeviceSpeechEngine: OnDeviceSpeechEngine {
     }
 
     func emit(_ text: String) { onText?(text) }
+    func emitFinish(_ error: Error? = nil) { onFinish?(error) }
+}
+
+private enum TestError: Error { case failed }
+
+private actor AuthorizationGate {
+    private var continuation: CheckedContinuation<Bool, Never>?
+	private var opened = false
+	func wait() async -> Bool {
+		if opened { return true }
+		return await withCheckedContinuation { continuation = $0 }
+	}
+	func open() { opened = true; continuation?.resume(returning: true); continuation = nil }
 }

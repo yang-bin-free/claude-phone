@@ -18,7 +18,7 @@ func TestBusySessionDequeuesPromptAfterDone(t *testing.T) {
 	e.procs[sess.ID] = proc
 	e.busy[sess.ID] = true
 
-	if err := e.handleText(sess.ID, []byte(`{"type":"text","content":"second"}`)); err != nil {
+	if _, err := e.handleText(sess.ID, []byte(`{"type":"text","content":"second"}`)); err != nil {
 		t.Fatal(err)
 	}
 	if len(e.queues[sess.ID]) != 1 || len(proc.sent) != 0 {
