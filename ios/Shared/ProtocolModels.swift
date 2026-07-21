@@ -7,7 +7,45 @@ struct SessionInfo: Codable, Identifiable, Hashable {
     let owner: String
     let subscribers: [String]
     let createdAt: Int64
+    let cwd: String
+    let provider: String
+    let model: String?
+    let permissionMode: String
     var id: String { sessionId }
+}
+
+struct ProviderPermission: Codable, Identifiable, Hashable {
+    let id: String
+    let label: String
+    let description: String
+    let dangerous: Bool
+    let mutable: Bool
+
+    init(id: String, label: String, description: String = "", dangerous: Bool = false, mutable: Bool = true) {
+        self.id = id; self.label = label; self.description = description; self.dangerous = dangerous; self.mutable = mutable
+    }
+
+    private enum CodingKeys: String, CodingKey { case id, label, description, dangerous, mutable }
+    init(from decoder: Decoder) throws {
+        let box = try decoder.container(keyedBy: CodingKeys.self)
+        id = try box.decode(String.self, forKey: .id)
+        label = try box.decode(String.self, forKey: .label)
+        description = try box.decodeIfPresent(String.self, forKey: .description) ?? ""
+        dangerous = try box.decodeIfPresent(Bool.self, forKey: .dangerous) ?? false
+        mutable = try box.decodeIfPresent(Bool.self, forKey: .mutable) ?? true
+    }
+}
+
+struct ProviderInfo: Codable, Identifiable, Hashable {
+    let id: String
+    let name: String
+    let available: Bool
+    let unavailableReason: String?
+    let permissions: [ProviderPermission]
+
+    init(id: String, name: String, available: Bool, unavailableReason: String?, permissions: [ProviderPermission]) {
+        self.id = id; self.name = name; self.available = available; self.unavailableReason = unavailableReason; self.permissions = permissions
+    }
 }
 
 struct ProjectInfo: Codable, Identifiable, Hashable {
@@ -35,9 +73,10 @@ struct HistoryItem: Codable, Identifiable, Hashable {
 enum ServerMessage: Equatable {
     case hello(agentVersion: String, claudeVersion: String, protocolVersion: String)
     case sessionList([SessionInfo])
+    case providerList([ProviderInfo])
     case projectList([ProjectInfo])
     case templateList([PromptTemplate])
-    case sessionCreated(id: String, name: String, cwd: String)
+    case sessionCreated(id: String, name: String, cwd: String, provider: String, model: String?, permissionMode: String)
     case sessionStopped(id: String)
     case history(sessionID: String, messages: [HistoryItem])
     case thinking
@@ -54,8 +93,8 @@ enum ServerMessage: Equatable {
 
 extension ServerMessage: Decodable {
     private enum Keys: String, CodingKey {
-        case type, agentVersion, claudeVersion, protocolVersion, sessions, projects, templates
-        case sessionId, name, cwd, messages, content, tool, input, msgId, position, state, idleSeconds, code, message
+        case type, agentVersion, claudeVersion, protocolVersion, sessions, projects, providers, templates
+        case sessionId, name, cwd, provider, model, permissionMode, messages, content, tool, input, msgId, position, state, idleSeconds, code, message
     }
 
     init(from decoder: Decoder) throws {
@@ -64,9 +103,17 @@ extension ServerMessage: Decodable {
         switch type {
         case "hello": self = .hello(agentVersion: try box.decode(String.self, forKey: .agentVersion), claudeVersion: try box.decode(String.self, forKey: .claudeVersion), protocolVersion: try box.decode(String.self, forKey: .protocolVersion))
         case "session_list": self = .sessionList(try box.decodeIfPresent([SessionInfo].self, forKey: .sessions) ?? [])
+        case "provider_list": self = .providerList(try box.decodeIfPresent([ProviderInfo].self, forKey: .providers) ?? [])
         case "project_list": self = .projectList(try box.decodeIfPresent([ProjectInfo].self, forKey: .projects) ?? [])
         case "template_list": self = .templateList(try box.decodeIfPresent([PromptTemplate].self, forKey: .templates) ?? [])
-        case "session_created": self = .sessionCreated(id: try box.decode(String.self, forKey: .sessionId), name: try box.decode(String.self, forKey: .name), cwd: try box.decode(String.self, forKey: .cwd))
+        case "session_created": self = .sessionCreated(
+            id: try box.decode(String.self, forKey: .sessionId),
+            name: try box.decode(String.self, forKey: .name),
+            cwd: try box.decode(String.self, forKey: .cwd),
+            provider: try box.decode(String.self, forKey: .provider),
+            model: try box.decodeIfPresent(String.self, forKey: .model),
+            permissionMode: try box.decode(String.self, forKey: .permissionMode)
+        )
         case "session_stopped": self = .sessionStopped(id: try box.decode(String.self, forKey: .sessionId))
         case "history": self = .history(sessionID: try box.decode(String.self, forKey: .sessionId), messages: try box.decodeIfPresent([HistoryItem].self, forKey: .messages) ?? [])
         case "thinking": self = .thinking
