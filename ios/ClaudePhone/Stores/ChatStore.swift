@@ -28,7 +28,7 @@ final class ChatStore {
             for item in items { replay(item) }
         case .thinking: finishAssistant()
         case .token(let value): queueToken(value)
-        case .toolUse(let tool, let input): flushTokens(); finishAssistant(); append(.tool, "🔧 \(tool)\(input.isEmpty ? "" : "\n\(input)")")
+        case .toolUse: break
         case .queued(let id, let position): append(.status, "已排队（第 \(position) 条）", queueID: id)
         case .dequeued(let id): messages.removeAll { $0.queueID == id }
         case .health(_, let state, let idle): healthState = state; if state != "healthy" { append(.status, state == "stalled" ? "会话可能卡住（\(idle)s）" : "会话无响应（\(idle)s）") }
@@ -58,6 +58,6 @@ final class ChatStore {
     private func append(_ role: ChatRole, _ text: String, queueID: String? = nil) { messages.append(ChatMessage(role: role, text: text, queueID: queueID)); trim() }
     private func trim() { if messages.count > 500 { messages.removeFirst(messages.count - 500) } }
     private func replay(_ item: HistoryItem) {
-        switch item.type { case "text": append(.user, item.content ?? ""); case "token": queueToken(item.content ?? ""); case "tool_use": append(.tool, "🔧 \(item.tool ?? "Tool")\n\(item.input ?? "")"); case "done": flushTokens(); finishAssistant(); default: break }
+        switch item.type { case "text": append(.user, item.content ?? ""); case "token": queueToken(item.content ?? ""); case "tool_use": break; case "done": flushTokens(); finishAssistant(); default: break }
     }
 }

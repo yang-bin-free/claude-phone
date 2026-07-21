@@ -29,7 +29,6 @@ header { border-bottom: 1px solid var(--border); display: flex; align-items: cen
 .message-copy:hover { opacity: 1; }
 .message-copy::before { content: "复制"; }
 .message-copy[data-copied="true"]::before { content: "已复制"; }
-.message.tool { background: #171f2a; border: 1px solid #2d4058; color: #c6d8ef; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; }
 .message.error { background: #53272d; color: #ffbbc3; }
 .message.queued { background: var(--surface-raised); color: var(--muted); font-size: 13px; }
 .empty { color: var(--muted); text-align: center; margin: 18vh auto 0; max-width: 360px; }

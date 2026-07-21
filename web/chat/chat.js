@@ -1,5 +1,4 @@
 (() => {
-  const { formatToolUse } = globalThis.CodeAfarToolFormat;
   const state = {
     ws: null, sessionId: "", retry: 0, retryTimer: 0, statusTimer: 0, generation: 0,
     assistantChunk: null, pendingTokens: "", tokenFrame: 0,
@@ -422,9 +421,6 @@
       } else if (item.type === "token") {
         if (!assistant) assistant = append("assistant", "");
         assistant.textContent += item.content || "";
-      } else if (item.type === "tool_use") {
-        append("tool", formatToolUse(item.tool, item.input));
-        assistant = null;
       } else if (item.type === "done") {
         assistant = null;
       }
@@ -623,9 +619,6 @@
         state.assistantChunk = null;
         break;
       case "tool_use":
-        flushTokens();
-        state.assistantChunk = null;
-        append("tool", formatToolUse(msg.tool, msg.input));
         break;
       case "token":
         queueToken(msg.content);

@@ -8,7 +8,7 @@ import (
 
 func TestSharedChatAssetsSupportMobileRemoteConnection(t *testing.T) {
 	for _, name := range []string{
-		"chat/index.html", "chat/chat.js", "chat/tool-format.js", "chat/core.css", "chat/desktop.css", "chat/mobile.css",
+		"chat/index.html", "chat/chat.js", "chat/core.css", "chat/desktop.css", "chat/mobile.css",
 	} {
 		if _, err := fs.ReadFile(Assets, name); err != nil {
 			t.Fatalf("missing embedded asset %s: %v", name, err)
@@ -32,7 +32,7 @@ func TestSharedChatAssetsSupportMobileRemoteConnection(t *testing.T) {
 		"action: \"list_templates\"", "case \"template_list\"",
 		"requestAnimationFrame(flushTokens)", "messages.children.length > 500",
 		"case \"queued\"", "已排队",
-		"case \"tool_use\"", "msg.tool",
+		"case \"tool_use\"",
 		"/admin/devices/", "revokeDevice",
 		"/admin/projects", "deleteProject",
 		"/admin/permission-rules", "deletePermissionRule",
