@@ -69,19 +69,19 @@ func TestDesktopShellHasStableStateAndNavigationHooks(t *testing.T) {
 	}
 }
 
-func TestProviderPickerDisablesUnavailableEnginesAndSynchronizesPermissions(t *testing.T) {
+func TestProviderSwitcherDisablesUnavailableEnginesAndSynchronizesPermissions(t *testing.T) {
 	jsBytes, err := fs.ReadFile(Assets, "chat/chat.js")
 	if err != nil {
 		t.Fatal(err)
 	}
 	js := string(jsBytes)
 	for _, marker := range []string{
-		`option.disabled = !descriptor.available`,
-		`state.providers.find(item => item.available)?.id`,
+		`button.disabled = !descriptor.available`,
+		`providerWorkspace.availableProvider(state.providers, state.activeProvider)`,
 		`state.draft.permissionMode = permissionSelect.value`,
 		`function providerName(id)`,
 		`providerName(state.selectedSession.provider)`,
-		`const id = isDraft() ? providerSelect.value : state.selectedSession?.provider`,
+		`state.providers.find(item => item.id === state.activeProvider)`,
 		`descriptor?.permissions?.[0]?.id`,
 	} {
 		if !strings.Contains(js, marker) {

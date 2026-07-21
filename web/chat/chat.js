@@ -1,11 +1,16 @@
 (() => {
+  const providerWorkspace = globalThis.CodeAfarProviderWorkspace;
+  const savedWorkspace = providerWorkspace.load(globalThis.localStorage);
   const state = {
     ws: null, sessionId: "", retry: 0, retryTimer: 0, statusTimer: 0, generation: 0,
     assistantChunk: null, pendingTokens: "", tokenFrame: 0,
     sessions: [], projects: [], providers: [], templates: [],
     engineReady: false, connected: false, sessionReady: false,
     draft: null, selectedSession: null, pendingFirstPrompt: null, pendingPermission: null,
-    supportsTextAck: false, voiceBase: ""
+    supportsTextAck: false, voiceBase: "",
+    activeProvider: savedWorkspace.activeProvider || "claude",
+    lastSessions: savedWorkspace.lastSessions,
+    receivedSessions: false, receivedProviders: false, workspaceRestored: false
   };
   const messages = document.querySelector("#messages");
   const connection = document.querySelector("#connection-state");
@@ -15,8 +20,6 @@
   const composer = document.querySelector("#composer");
   const prompt = document.querySelector("#prompt");
   const projectSelect = document.querySelector("#draft-project");
-  const providerSelect = document.querySelector("#draft-provider");
-  const providerLabel = document.querySelector("#provider-label");
   const permissionSelect = document.querySelector("#draft-permission");
   const sessionContext = document.querySelector("#session-context");
   const draftStatus = document.querySelector("#draft-status");
@@ -108,9 +111,7 @@
   }
 
   function currentProvider() {
-    const id = isDraft() ? providerSelect.value : state.selectedSession?.provider;
-    const resolvedID = id || state.providers.find(item => item.available)?.id || "claude";
-    return state.providers.find(item => item.id === resolvedID);
+    return state.providers.find(item => item.id === state.activeProvider);
   }
 
   function providerName(id) {
@@ -119,6 +120,17 @@
 
   function isDraft() {
     return Boolean(state.draft);
+  }
+
+  function saveWorkspace() {
+    providerWorkspace.save(globalThis.localStorage, {
+      activeProvider: state.activeProvider,
+      lastSessions: state.lastSessions
+    });
+  }
+
+  function visibleSessions() {
+    return providerWorkspace.sessionsForProvider(state.sessions, state.activeProvider);
   }
 
   function updateControls() {
@@ -132,7 +144,6 @@
     document.querySelector("#new-session").disabled = !engineAvailable;
     document.querySelector("#new-session-mobile").disabled = !engineAvailable;
     projectSelect.disabled = !isDraft() || state.draft?.status === "creating";
-    providerSelect.disabled = !isDraft() || state.draft?.status === "creating";
     permissionSelect.disabled = !engineAvailable || state.draft?.status === "creating";
   }
 
@@ -314,23 +325,35 @@
     updateControls();
   }
 
+  function providerDisplayName(descriptor) {
+    return descriptor.id === "claude" ? "Claude" : descriptor.name;
+  }
+
+  function renderProviderSwitchers() {
+    ["provider-switcher", "provider-switcher-mobile"].forEach(id => {
+      const container = document.querySelector(`#${id}`);
+      container.replaceChildren();
+      state.providers.forEach(descriptor => {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = `provider-option${descriptor.id === state.activeProvider ? " active" : ""}`;
+        button.textContent = providerDisplayName(descriptor);
+        button.disabled = !descriptor.available;
+        button.title = descriptor.available ? descriptor.name : (descriptor.unavailableReason || `${descriptor.name} 不可用`);
+        button.setAttribute("aria-pressed", descriptor.id === state.activeProvider ? "true" : "false");
+        button.addEventListener("click", () => switchProvider(descriptor.id));
+        container.append(button);
+      });
+    });
+  }
+
   function renderProviders() {
-    const selected = state.providers.some(item => item.id === providerSelect.value && item.available)
-	  ? providerSelect.value
-	  : state.providers.find(item => item.available)?.id || "";
-    providerSelect.replaceChildren();
-    state.providers.forEach(descriptor => {
-	  const label = descriptor.available ? descriptor.name : `${descriptor.name}（不可用）`;
-	  const option = new Option(label, descriptor.id);
-	  option.disabled = !descriptor.available;
-	  option.title = descriptor.unavailableReason || "";
-	  providerSelect.add(option);
-	});
-    if ([...providerSelect.options].some(option => option.value === selected)) providerSelect.value = selected;
-    const only = state.providers.length === 1 ? state.providers[0] : null;
-    providerSelect.hidden = Boolean(only);
-    providerLabel.hidden = !only;
-    providerLabel.textContent = only?.name || "";
+    const available = providerWorkspace.availableProvider(state.providers, state.activeProvider);
+    if (available && available !== state.activeProvider && !state.selectedSession) {
+      state.activeProvider = available;
+      saveWorkspace();
+    }
+    renderProviderSwitchers();
     renderPermissions(isDraft() ? state.draft.permissionMode : state.selectedSession?.permissionMode);
   }
 
@@ -359,8 +382,8 @@
     }
   }
 
-  async function beginDraft() {
-    if (isDraft() && prompt.value.trim() && !await requestConfirmation("当前新会话草稿尚未发送，确认丢弃？")) return;
+  async function beginDraft(confirmDiscard = true) {
+    if (confirmDiscard && isDraft() && prompt.value.trim() && !await requestConfirmation("当前新会话草稿尚未发送，确认丢弃？")) return;
     state.sessionId = "";
     state.sessionReady = false;
     state.selectedSession = null;
@@ -369,8 +392,6 @@
     prompt.value = "";
     prompt.placeholder = "告诉 CodeAfar 要做什么…";
     projectSelect.hidden = false;
-    providerLabel.hidden = state.providers.length !== 1;
-    providerSelect.hidden = state.providers.length === 1;
     sessionContext.hidden = true;
     permissionSelect.disabled = false;
     draftStatus.textContent = "";
@@ -384,18 +405,22 @@
     updateControls();
   }
 
-  async function selectSession(sessionId, name) {
-    if (isDraft() && prompt.value.trim() && !await requestConfirmation("当前新会话草稿尚未发送，确认离开？")) return;
+  async function selectSession(sessionId, name, confirmDiscard = true) {
+    if (confirmDiscard && isDraft() && prompt.value.trim() && !await requestConfirmation("当前新会话草稿尚未发送，确认离开？")) return;
+    const selected = state.sessions.find(item => item.sessionId === sessionId) || null;
+    if (!selected) return;
     state.draft = null;
     if (state.pendingPermission?.sessionId !== sessionId) state.pendingPermission = null;
     state.sessionId = sessionId;
-    state.selectedSession = state.sessions.find(item => item.sessionId === sessionId) || null;
+    state.selectedSession = selected;
+    state.activeProvider = selected.provider;
+    state.lastSessions[selected.provider] = selected.sessionId;
+    saveWorkspace();
+    renderProviderSwitchers();
     state.sessionReady = false;
     prompt.value = "";
     prompt.placeholder = "输入消息…";
     projectSelect.hidden = true;
-    providerSelect.hidden = true;
-    providerLabel.hidden = true;
     sessionContext.hidden = false;
     sessionContext.textContent = state.selectedSession ? `${providerName(state.selectedSession.provider)} · ${state.selectedSession.cwd}` : "";
     renderPermissions(state.selectedSession?.permissionMode || "default");
@@ -408,6 +433,33 @@
     send({ type: "control", action: "load_history", sessionId, limit: 500 });
     renderSessions();
     updateControls();
+  }
+
+  async function switchProvider(providerID) {
+    const descriptor = state.providers.find(item => item.id === providerID);
+    if (!descriptor?.available || providerID === state.activeProvider) return;
+    if (isDraft() && prompt.value.trim() && !await requestConfirmation("当前新会话草稿尚未发送，确认切换引擎？")) return;
+    if (state.selectedSession) state.lastSessions[state.selectedSession.provider] = state.selectedSession.sessionId;
+    state.activeProvider = providerID;
+    saveWorkspace();
+    renderProviderSwitchers();
+    renderSessions();
+    const remembered = providerWorkspace.rememberedSession(state.sessions, providerID, state.lastSessions);
+    if (remembered) await selectSession(remembered.sessionId, remembered.name, false);
+    else await beginDraft(false);
+  }
+
+  async function restoreWorkspace() {
+    if (state.workspaceRestored || !state.receivedSessions || !state.receivedProviders) return;
+    state.workspaceRestored = true;
+    const available = providerWorkspace.availableProvider(state.providers, state.activeProvider);
+    if (available) state.activeProvider = available;
+    saveWorkspace();
+    renderProviderSwitchers();
+    renderSessions();
+    const remembered = providerWorkspace.rememberedSession(state.sessions, state.activeProvider, state.lastSessions);
+    if (remembered && isDraft() && !prompt.value.trim()) await selectSession(remembered.sessionId, remembered.name, false);
+    else if (!state.sessionId) await beginDraft(false);
   }
 
   function renderHistory(items) {
@@ -432,7 +484,7 @@
     list.replaceChildren();
     const select = document.querySelector("#mobile-session-select");
     select.replaceChildren(new Option("会话", ""));
-    state.sessions.forEach(session => {
+    visibleSessions().forEach(session => {
       const button = document.createElement("button");
       button.className = `session-item${session.sessionId === state.sessionId ? " active" : ""}`;
       button.textContent = session.name || session.sessionId;
@@ -446,7 +498,7 @@
     if (!state.draft?.firstPrompt) return false;
     return send({
       type: "control", action: "create_session", name: sessionNameFor(state.draft.firstPrompt, projectSelect.value),
-      workingDir: projectSelect.value, provider: providerSelect.value || "claude",
+      workingDir: projectSelect.value, provider: state.activeProvider,
       permissionMode: state.draft.permissionMode, requestId: state.draft.requestId
     });
   }
@@ -523,6 +575,12 @@
         break;
       case "session_list":
         state.sessions = msg.sessions || [];
+        state.receivedSessions = true;
+        Object.entries(state.lastSessions).forEach(([providerID, sessionID]) => {
+          if (!state.sessions.some(item => item.provider === providerID && item.sessionId === sessionID)) {
+            delete state.lastSessions[providerID];
+          }
+        });
         if (state.sessionId) {
           const selected = state.sessions.find(item => item.sessionId === state.sessionId);
           if (selected) {
@@ -530,7 +588,9 @@
             if (!state.pendingPermission) permissionSelect.value = selected.permissionMode || "default";
           }
         }
+        saveWorkspace();
         renderSessions();
+        restoreWorkspace();
         break;
       case "session_created": {
         if (state.draft && msg.requestId && msg.requestId !== state.draft.requestId) break;
@@ -543,12 +603,14 @@
           sessionId: msg.sessionId, name: msg.name, cwd: msg.cwd, provider: msg.provider,
           permissionMode: msg.permissionMode, model: msg.model
         };
+        state.activeProvider = msg.provider || state.activeProvider;
+        state.lastSessions[state.activeProvider] = msg.sessionId;
+        saveWorkspace();
+        renderProviderSwitchers();
         prompt.disabled = false;
         prompt.value = "";
         prompt.placeholder = "输入消息…";
         projectSelect.hidden = true;
-        providerSelect.hidden = true;
-        providerLabel.hidden = true;
         sessionContext.hidden = false;
         sessionContext.textContent = `${providerName(msg.provider)} · ${msg.cwd}`;
         renderPermissions(msg.permissionMode);
@@ -582,7 +644,9 @@
         break;
       case "provider_list":
         state.providers = msg.providers || [];
+        state.receivedProviders = true;
         renderProviders();
+        restoreWorkspace();
         break;
       case "template_list": {
         state.templates = msg.templates || [];
@@ -641,10 +705,13 @@
         break;
       case "session_stopped":
         if (state.sessionId === msg.sessionId) {
+          const providerID = state.selectedSession?.provider || state.activeProvider;
+          if (state.lastSessions[providerID] === msg.sessionId) delete state.lastSessions[providerID];
           state.sessionId = "";
           state.sessionReady = false;
+          saveWorkspace();
           connection.textContent = state.connected ? "已连接" : "重新连接中";
-          beginDraft();
+          beginDraft(false);
         }
         send({ type: "control", action: "list_sessions", limit: 100 });
         break;
@@ -749,10 +816,6 @@
   projectSelect.addEventListener("change", () => {
     if (projectSelect.value === "__choose__") chooseProjectDirectory();
     else updateControls();
-  });
-  providerSelect.addEventListener("change", () => {
-	if (isDraft()) state.draft.permissionMode = "";
-    renderPermissions(isDraft() ? state.draft.permissionMode : "");
   });
   permissionSelect.addEventListener("change", async () => {
     const draft = state.draft;

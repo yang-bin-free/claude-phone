@@ -12,14 +12,20 @@
 <body>
   <div class="app-shell">
     <aside class="sidebar">
-      <div class="brand"><span class="status-dot" id="status-dot"></span><span>CodeAfar</span></div>
-      <button id="new-session" class="primary">新建会话</button>
+      <div class="provider-toolbar">
+        <span class="status-dot" id="status-dot" aria-hidden="true"></span>
+        <div id="provider-switcher" class="provider-switcher" role="group" aria-label="编码引擎"></div>
+        <button id="new-session" class="new-session-button" aria-label="在当前引擎中新建会话" title="新建会话">＋</button>
+      </div>
       <nav id="session-list" aria-label="会话列表"></nav>
       <button id="show-admin" class="quiet">管理与诊断</button>
     </aside>
     <main class="workspace">
       <header>
-        <button id="new-session-mobile" class="quiet">＋</button>
+        <div class="mobile-provider-toolbar">
+          <div id="provider-switcher-mobile" class="provider-switcher" role="group" aria-label="编码引擎"></div>
+          <button id="new-session-mobile" class="quiet" aria-label="在当前引擎中新建会话" title="新建会话">＋</button>
+        </div>
         <strong id="view-title">新会话</strong>
         <select id="mobile-session-select" aria-label="切换会话"><option value="">会话</option></select>
         <span id="connection-state">连接中</span>
@@ -34,8 +40,6 @@
             <textarea id="prompt" rows="3" placeholder="告诉 CodeAfar 要做什么…"></textarea>
             <div class="composer-context">
               <select id="draft-project" aria-label="工作目录"><option value="">选择项目</option></select>
-              <span id="provider-label" class="context-label">Claude Code</span>
-              <select id="draft-provider" aria-label="编码引擎" hidden></select>
               <select id="draft-permission" aria-label="权限模式"></select>
               <span id="session-context" class="session-context" hidden></span>
               <span id="draft-status" class="draft-status" role="status"></span>

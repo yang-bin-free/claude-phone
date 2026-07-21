@@ -185,11 +185,43 @@ func TestNewSessionUsesComposerContextBar(t *testing.T) {
 		}
 	}
 	for _, marker := range []string{
-		`id="draft-project"`, `id="draft-provider"`, `id="draft-permission"`,
-		`id="provider-label"`, `class="composer-context"`, "告诉 CodeAfar 要做什么",
+		`id="draft-project"`, `id="draft-permission"`,
+		`class="composer-context"`, "告诉 CodeAfar 要做什么",
 	} {
 		if !strings.Contains(html, marker) {
 			t.Errorf("draft composer missing %q", marker)
+		}
+	}
+}
+
+func TestProviderSwitcherOwnsNewSessionAndHistory(t *testing.T) {
+	htmlBytes, err := fs.ReadFile(Assets, "chat/index.html")
+	if err != nil {
+		t.Fatal(err)
+	}
+	jsBytes, err := fs.ReadFile(Assets, "chat/chat.js")
+	if err != nil {
+		t.Fatal(err)
+	}
+	cssBytes, err := fs.ReadFile(Assets, "chat/desktop.css")
+	if err != nil {
+		t.Fatal(err)
+	}
+	html, js, css := string(htmlBytes), string(jsBytes), string(cssBytes)
+	combined := html + js + css
+	for _, marker := range []string{
+		`class="provider-toolbar"`, `id="provider-switcher"`, `id="provider-switcher-mobile"`,
+		`aria-label="在当前引擎中新建会话"`, `function switchProvider(providerID)`,
+		`providerWorkspace.sessionsForProvider(state.sessions, state.activeProvider)`,
+		`provider: state.activeProvider`, `lastSessions`,
+	} {
+		if !strings.Contains(combined, marker) {
+			t.Errorf("provider workspace missing %q", marker)
+		}
+	}
+	for _, forbidden := range []string{`id="draft-provider"`, `id="provider-label"`} {
+		if strings.Contains(html, forbidden) {
+			t.Errorf("duplicate composer provider control remains %q", forbidden)
 		}
 	}
 }
@@ -201,7 +233,7 @@ func TestChatScriptCreatesThenSendsPendingFirstPrompt(t *testing.T) {
 	}
 	js := string(jsBytes)
 	for _, marker := range []string{
-		`function beginDraft()`, `status: "draft"`, `requestId: newRequestID()`,
+		`function beginDraft(confirmDiscard = true)`, `status: "draft"`, `requestId: newRequestID()`,
 		`firstPrompt: content`, `action: "create_session"`, `requestId: state.draft.requestId`,
 		`case "session_created":`, `pendingFirstPrompt`, `case "text_accepted":`,
 		`requestId: state.pendingFirstPrompt.requestId`, `deliverPendingFirstPrompt()`,
