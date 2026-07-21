@@ -8,7 +8,7 @@ import (
 
 func TestSharedChatAssetsSupportMobileRemoteConnection(t *testing.T) {
 	for _, name := range []string{
-		"chat/index.html", "chat/chat.js", "chat/core.css", "chat/desktop.css", "chat/mobile.css",
+		"chat/index.html", "chat/chat.js", "chat/provider-workspace.js", "chat/core.css", "chat/desktop.css", "chat/mobile.css",
 	} {
 		if _, err := fs.ReadFile(Assets, name); err != nil {
 			t.Fatalf("missing embedded asset %s: %v", name, err)
