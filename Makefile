@@ -52,8 +52,8 @@ release: android-apk
 
 verify: test test-race build-mac build-agent android-aar
 	node --check web/chat/chat.js
-	node --check web/chat/tool-format.js
-	node --test web/chat/tool-format.test.js
+	node --check web/chat/provider-workspace.js
+	node --test web/chat/provider-workspace.test.js
 	node --check web/admin/admin.js
 	git diff --check
 	./scripts/test-android-aar.sh

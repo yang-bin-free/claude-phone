@@ -349,12 +349,15 @@
 
   function renderProviders() {
     const available = providerWorkspace.availableProvider(state.providers, state.activeProvider);
-    if (available && available !== state.activeProvider && !state.selectedSession) {
+    let changed = false;
+    if (available && available !== state.activeProvider) {
       state.activeProvider = available;
+      changed = true;
       saveWorkspace();
     }
     renderProviderSwitchers();
     renderPermissions(isDraft() ? state.draft.permissionMode : state.selectedSession?.permissionMode);
+    return changed;
   }
 
   async function chooseProjectDirectory() {
@@ -544,7 +547,7 @@
     append("error", `${msg.code}: ${msg.message}`);
   }
 
-  function handleMessage(event) {
+  async function handleMessage(event) {
     let msg;
     try { msg = JSON.parse(event.data); }
     catch (error) {
@@ -645,8 +648,13 @@
       case "provider_list":
         state.providers = msg.providers || [];
         state.receivedProviders = true;
-        renderProviders();
-        restoreWorkspace();
+        if (renderProviders() && state.workspaceRestored) {
+          renderSessions();
+          const remembered = providerWorkspace.rememberedSession(state.sessions, state.activeProvider, state.lastSessions);
+          if (remembered) await selectSession(remembered.sessionId, remembered.name, false);
+          else await beginDraft(false);
+        }
+        await restoreWorkspace();
         break;
       case "template_list": {
         state.templates = msg.templates || [];

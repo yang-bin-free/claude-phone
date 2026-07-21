@@ -37,7 +37,7 @@ func TestHandlerServesShellAssetsAndDelegatesAPIs(t *testing.T) {
 		wantContent string
 	}{
 		{path: "/", wantStatus: http.StatusOK, wantContent: "text/html"},
-		{path: "/assets/tool-format.js", wantStatus: http.StatusOK, wantContent: "text/javascript"},
+		{path: "/assets/provider-workspace.js", wantStatus: http.StatusOK, wantContent: "text/javascript"},
 		{path: "/assets/chat.js", wantStatus: http.StatusOK, wantContent: "text/javascript"},
 		{path: "/assets/core.css", wantStatus: http.StatusOK, wantContent: "text/css"},
 		{path: "/desktop/status", wantStatus: http.StatusOK, wantContent: "application/json"},

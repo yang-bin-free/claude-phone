@@ -78,6 +78,7 @@ func TestProviderSwitcherDisablesUnavailableEnginesAndSynchronizesPermissions(t 
 	for _, marker := range []string{
 		`button.disabled = !descriptor.available`,
 		`providerWorkspace.availableProvider(state.providers, state.activeProvider)`,
+		`if (available && available !== state.activeProvider)`,
 		`state.draft.permissionMode = permissionSelect.value`,
 		`function providerName(id)`,
 		`providerName(state.selectedSession.provider)`,
@@ -87,6 +88,9 @@ func TestProviderSwitcherDisablesUnavailableEnginesAndSynchronizesPermissions(t 
 		if !strings.Contains(js, marker) {
 			t.Errorf("provider picker behavior missing %q", marker)
 		}
+	}
+	if strings.Contains(js, `available !== state.activeProvider && !state.selectedSession`) {
+		t.Fatal("provider fallback incorrectly keeps an unavailable selected workspace active")
 	}
 }
 
